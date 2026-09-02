@@ -6,10 +6,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-title" content="Forge"/>
 <meta name="theme-color" content="#101214"/>
-<title>Forge 0.4.0</title>
+<title>Forge 0.5.0</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:#101214;color:#f6f3ec;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom))}
+body{margin:0;background:#101214;color:#f6f3ec;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:calc(16px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom))}
 .app{max-width:480px;margin:0 auto}
 .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:8px}
 .brand{display:flex;gap:10px;align-items:center}
@@ -23,23 +23,33 @@ small{display:block;color:#b0b8c2;font-size:11px;font-weight:700;letter-spacing:
 .btn{display:block;width:100%;padding:16px;border:0;border-radius:14px;font-weight:800;font-size:16px;margin-top:8px;color:#14110a;background:#f0b429}
 .btn2{background:transparent;color:#f6f3ec;border:1px solid #3a4350}
 .row{display:flex;gap:8px;align-items:center;margin-top:8px}
-input,select{width:100%;background:#181c21;border:1px solid #3a4350;border-radius:10px;padding:10px;color:#f6f3ec;font:inherit}
-.set{display:grid;grid-template-columns:28px 1fr 44px 44px;gap:8px;align-items:center;background:#181c21;border-radius:12px;padding:8px;margin-top:8px}
-.ok{background:#1e5a3a}
-.fail{background:#5a2a24}
-.icon{width:44px;height:44px;border:0;border-radius:12px;background:#222830;color:#f6f3ec;font-size:18px}
+input{width:100%;background:#181c21;border:1px solid #3a4350;border-radius:10px;padding:10px;color:#f6f3ec;font:inherit}
+.set{display:grid;grid-template-columns:32px 1fr 52px 52px;gap:8px;align-items:center;background:#181c21;border:2px solid #3a4350;border-radius:14px;padding:10px;margin-top:10px}
+.set.hit{background:#143322;border-color:#3dba7a}
+.set.miss{background:#3a1c18;border-color:#e15b4a}
+.set .tag{font-size:11px;font-weight:800;letter-spacing:.06em}
+.set.hit .tag{color:#3dba7a}
+.set.miss .tag{color:#ffb4ab}
+.icon{width:52px;height:52px;border:0;border-radius:14px;background:#2a333d;color:#f6f3ec;font-size:22px;font-weight:800}
+.set.hit .icon.go{background:#3dba7a;color:#062214}
+.set.miss .icon.no{background:#e15b4a;color:#2a0c0a}
 .muted{color:#b0b8c2;font-size:13px}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2a3038;padding:10px 14px;border-radius:99px;font-size:13px;font-weight:700;opacity:0}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2a3038;padding:10px 14px;border-radius:99px;font-size:13px;font-weight:700;opacity:0;z-index:30}
 .toast.show{opacity:1}
 .unit{flex:0 0 48px;text-align:center;font-weight:800}
+.status{background:#1c2430;border-radius:12px;padding:12px;margin-bottom:12px}
+.clock{font-size:42px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.restbar{position:sticky;bottom:0;margin:16px -16px 0;padding:14px 16px calc(14px + env(safe-area-inset-bottom));background:#0e2a1c;border-top:2px solid #3dba7a;z-index:20}
+.restbar.go{background:#0e2a1c}
+.restbar.done{background:#2a2410;border-top-color:#f0b429}
 </style>
 </head>
 <body>
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.4.0",K="forge-ab-v1";
-var D={units:"lb",rest:180,last:null,fail:{},hist:[],
+var V="0.5.0",K="forge-ab-v1";
+var D={units:"lb",rest:90,last:null,fail:{},hist:[],
 A:{name:"Workout A",ex:[
 {id:"squat",n:"Squat",s:5,r:5,inc:5,w:45},
 {id:"bench",n:"Bench Press",s:5,r:5,inc:5,w:45},
@@ -54,12 +64,13 @@ function load(){
     var o=clone(D);["units","rest","last","fail","hist","A","B"].forEach(function(k){if(p[k]!=null)o[k]=p[k]});return o;
   }catch(e){return clone(D)}
 }
-var S=load(),view="home",sess=null,edit="A",timer=null,left=0,lastRes=[];
+var S=load(),view="home",sess=null,timer=null,left=0,lastRes=[],lastMarked=0;
+if(!S.rest) S.rest=90;
 function save(){try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}}
 function toast(m){var t=document.getElementById("toast");t.textContent=m;t.className="toast show";setTimeout(function(){t.className="toast"},1600)}
 function next(){return S.last==="A"?"B":"A"}
 function u(){return S.units==="kg"?"kg":"lb"}
-function esc(s){return String(s).replace(/[&<>"]/g,function(c){return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':'&quot;'})[c]})}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return ({"&":"&","<":"<",">":">",'"':'"'})[c]})}
 function bump(id,fn){["A","B"].forEach(function(k){S[k].ex.forEach(function(e){if(e.id===id)fn(e)})})}
 function header(title,back){
   return '<div class="top"><div class="brand">'+(back?'<button class="icon" onclick="go(\'home\')">←</button>':'<div class="logo">F</div>')+
@@ -79,6 +90,8 @@ function home(){
     '<button class="btn btn2" onclick="go(\'editB\')">Edit Workout B</button></div>';
   html+='<div class="card"><div class="label">Sessions</div><p class="name">'+(S.hist.length)+'</p>'+
     '<p class="muted">'+(h?("Last: "+S[h.k].name+" · "+new Date(h.at).toLocaleDateString()):"No sessions yet")+'</p>'+
+    '<div class="label" style="margin-top:10px">Rest between sets (seconds)</div>'+
+    '<input type="number" value="'+S.rest+'" min="30" step="15" onchange="S.rest=+this.value||90;save()">'+
     '<button class="btn btn2" onclick="toggleU()">Units: '+u()+'</button></div>';
   return html;
 }
@@ -93,42 +106,61 @@ function start(k){
     var log=[]; for(var i=0;i<e.s;i++) log.push({r:e.r,ok:0});
     return {id:e.id,n:e.n,s:e.s,r:e.r,inc:e.inc,w:e.w,log:log};
   })};
-  view="sess"; draw();
+  left=0; lastMarked=0; view="sess"; draw();
 }
+function doneCount(e){return e.log.filter(function(s){return s.ok}).length}
 function sessView(){
-  var e=sess.ex[sess.i], html='<div class="top"><button class="icon" onclick="if(confirm(\'Quit session?\')){sess=null;go(\'home\')}">✕</button>'+
-    '<div><div class="label" style="margin:0">'+esc(S[sess.k].name)+'</div><p class="muted">'+(sess.i+1)+' / '+sess.ex.length+'</p></div>'+
+  var e=sess.ex[sess.i], dc=doneCount(e);
+  var html='<div class="top"><button class="icon" onclick="if(confirm(\'Quit session?\')){sess=null;go(\'home\')}">✕</button>'+
+    '<div><div class="label" style="margin:0">'+esc(S[sess.k].name)+'</div><p class="muted">'+(sess.i+1)+' of '+sess.ex.length+' lifts</p></div>'+
     '<span class="ver">v'+V+'</span></div>';
-  html+='<div class="card"><div class="label">Now</div><div class="name">'+esc(e.n)+'</div>'+
-    '<p class="muted">'+e.s+' × '+e.r+' @ <b>'+e.w+' '+u()+'</b></p></div>';
+  html+='<div class="card"><div class="label">Now lifting</div><div class="name">'+esc(e.n)+'</div>'+
+    '<p class="muted">'+e.s+' sets × '+e.r+' reps @ <b>'+e.w+' '+u()+'</b></p>'+
+    '<div class="status"><b>'+dc+' of '+e.s+' sets logged</b><br><span class="muted">'+
+    (dc<e.s?('Tap the green check after set '+(dc+1)+'.'):'All sets logged. Go to next lift.')+'</span></div></div>';
   e.log.forEach(function(s,i){
-    html+='<div class="set"><div class="muted">'+(i+1)+'</div><div class="row" style="margin:0">'+
+    var st=s.ok===1?'hit':s.ok===2?'miss':'';
+    var tag=s.ok===1?'DONE':s.ok===2?'MISS':('SET '+(i+1));
+    html+='<div class="set '+st+'"><div class="tag">'+tag+'</div><div class="row" style="margin:0">'+
       '<button class="icon" onclick="chg('+i+',-1)">−</button><b>'+s.r+'</b>'+
       '<button class="icon" onclick="chg('+i+',1)">+</button></div>'+
-      '<button class="icon '+(s.ok===1?'ok':'')+'" onclick="mark('+i+',1)">✓</button>'+
-      '<button class="icon '+(s.ok===2?'fail':'')+'" onclick="mark('+i+',2)">✕</button></div>';
+      '<button class="icon go" onclick="mark('+i+',1)">✓</button>'+
+      '<button class="icon no" onclick="mark('+i+',2)">✕</button></div>';
   });
-  var done=e.log.every(function(s){return s.ok});
-  if(done) html+='<button class="btn" onclick="nxt()">'+(sess.i<sess.ex.length-1?'Next exercise':'Finish workout')+'</button>';
-  html+='<button class="btn btn2" onclick="nxt()">Skip exercise</button>';
-  if(left) html+='<div class="card"><div class="label">Rest</div><div class="name" id="clock">'+fmt(left)+'</div><button class="btn btn2" onclick="stopT()">Skip rest</button></div>';
+  if(dc===e.s) html+='<button class="btn" onclick="nxt()">'+(sess.i<sess.ex.length-1?'Next lift':'Finish workout')+'</button>';
+  html+='<button class="btn btn2" onclick="nxt()">Skip lift</button>';
+  if(left>0){
+    html+='<div class="restbar go"><div class="label">Rest — next set in</div><div class="clock" id="clock">'+fmt(left)+'</div>'+
+      '<p class="muted">Set '+(lastMarked+1)+' logged. Rest, then do set '+(lastMarked+2<=e.s?lastMarked+2:e.s)+'.</p>'+
+      '<button class="btn btn2" onclick="stopT()">Skip rest</button></div>';
+  } else if(dc>0 && dc<e.s){
+    html+='<div class="restbar done"><div class="label">Ready</div><div class="name">Do set '+(dc+1)+' now</div></div>';
+  }
   return html;
 }
 function chg(i,d){sess.ex[sess.i].log[i].r=Math.max(0,sess.ex[sess.i].log[i].r+d);draw()}
 function mark(i,ok){
   sess.ex[sess.i].log[i].ok=ok;
+  lastMarked=i;
   if(timer)clearInterval(timer);
-  left=S.rest;
+  left=S.rest||90;
   timer=setInterval(function(){
-    left--; if(left<=0){stopT(); if(navigator.vibrate)navigator.vibrate([200,80,200])}
-    var c=document.getElementById("clock"); if(c)c.textContent=fmt(left);
+    left--;
+    var c=document.getElementById("clock");
+    if(c) c.textContent=fmt(Math.max(0,left));
+    if(left<=0){
+      stopT();
+      toast("Rest over — next set");
+      if(navigator.vibrate) navigator.vibrate([200,80,200]);
+    }
   },1000);
+  toast(ok===1?("Set "+(i+1)+" done"):("Set "+(i+1)+" missed"));
   draw();
 }
 function stopT(){if(timer)clearInterval(timer);timer=null;left=0;draw()}
-function fmt(s){var m=Math.floor(s/60),x=String(s%60);if(x.length<2)x="0"+x;return m+":"+x}
+function fmt(s){s=Math.max(0,s);var m=Math.floor(s/60),x=String(s%60);if(x.length<2)x="0"+x;return m+":"+x}
 function nxt(){
-  if(sess.i<sess.ex.length-1){sess.i++;draw();return}
+  if(sess.i<sess.ex.length-1){left=0;if(timer)clearInterval(timer);timer=null;sess.i++;draw();return}
   lastRes=sess.ex.map(function(e){
     var hit=e.log.every(function(s){return s.ok===1&&s.r>=e.r});
     var miss=e.log.some(function(s){return s.ok===2||s.r<e.r});
@@ -175,7 +207,7 @@ function draw(){
     else if(view==="done")a.innerHTML=doneView();
     else if(view==="editA")a.innerHTML=editView("A");
     else if(view==="editB")a.innerHTML=editView("B");
-  }catch(e){a.innerHTML='<div class="card">Error: '+esc(e.message)+'</div>'}
+  }catch(err){a.innerHTML='<div class="card">Error: '+esc(err.message)+'</div>'}
 }
 draw();
 </script>
