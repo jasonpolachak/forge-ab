@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-title" content="Forge"/>
 <meta name="theme-color" content="#101214"/>
-<title>Forge 0.5.2</title>
+<title>Forge 0.5.3</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:#101214;color:#f6f3ec;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:calc(16px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom))}
@@ -48,7 +48,7 @@ input{width:100%;background:#181c21;border:1px solid #3a4350;border-radius:10px;
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.5.2",K="forge-ab-v1";
+var V="0.5.3",K="forge-ab-v1";
 var D={units:"lb",rest:90,last:null,fail:{},hist:[],
 A:{name:"Workout A",ex:[
 {id:"squat",n:"Squat",s:5,r:5,inc:5,w:45},
@@ -64,7 +64,7 @@ function load(){
     var o=clone(D);["units","rest","last","fail","hist","A","B"].forEach(function(k){if(p[k]!=null)o[k]=p[k]});return o;
   }catch(e){return clone(D)}
 }
-var S=load(),view="home",sess=null,timer=null,left=0,restEnds=0,lastRes=[],lastMarked=0,restTold=0,actx=null;
+var S=load(),view="home",sess=null,timer=null,left=0,restEnds=0,lastRes=[],lastMarked=0,restTold=0;
 if(!S.rest) S.rest=90;
 function save(){try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}}
 function toast(m){var t=document.getElementById("toast");t.textContent=m;t.className="toast show";setTimeout(function(){t.className="toast"},1600)}
@@ -101,7 +101,6 @@ function setW(k,i,v){
 }
 function toggleU(){S.units=S.units==="lb"?"kg":"lb";save();draw()}
 function start(k){
-  unlockAudio();
   var w=S[k];
   sess={k:k,i:0,ex:w.ex.map(function(e){
     var log=[]; for(var i=0;i<e.s;i++) log.push({r:e.r,ok:0});
@@ -140,39 +139,32 @@ function sessView(){
   return html;
 }
 function chg(i,d){sess.ex[sess.i].log[i].r=Math.max(0,sess.ex[sess.i].log[i].r+d);draw()}
-function unlockAudio(){
+function beep(){
   try{
     var AC=window.AudioContext||window.webkitAudioContext;
     if(!AC) return;
-    if(!actx) actx=new AC();
-    if(actx.state==="suspended") actx.resume();
-  }catch(e){}
-}
-function beep(){
-  unlockAudio();
-  if(!actx) return;
-  try{
-    var now=actx.currentTime;
+    var ctx=new AC();
+    var now=ctx.currentTime;
     for(var i=0;i<3;i++){
-      var o=actx.createOscillator(), g=actx.createGain();
+      var o=ctx.createOscillator(), g=ctx.createGain();
       o.type="sine"; o.frequency.value=880;
       g.gain.setValueAtTime(0.0001, now+i*0.22);
-      g.gain.exponentialRampToValueAtTime(0.25, now+i*0.22+0.02);
+      g.gain.exponentialRampToValueAtTime(0.2, now+i*0.22+0.02);
       g.gain.exponentialRampToValueAtTime(0.0001, now+i*0.22+0.16);
-      o.connect(g); g.connect(actx.destination);
+      o.connect(g); g.connect(ctx.destination);
       o.start(now+i*0.22); o.stop(now+i*0.22+0.18);
     }
+    setTimeout(function(){ try{ ctx.close(); }catch(e){} }, 900);
   }catch(e){}
 }
 function startRest(){
-  unlockAudio();
   restTold=0;
   if(timer)clearInterval(timer);
   restEnds=Date.now()+(S.rest||90)*1000;
   left=S.rest||90;
   timer=setInterval(tick,250);
 }
-function tick(){
+function tick(fromBg){
   if(!restEnds){left=0;return}
   left=Math.max(0,Math.round((restEnds-Date.now())/1000));
   var c=document.getElementById("clock");
@@ -183,7 +175,7 @@ function tick(){
     if(!restTold){
       restTold=1;
       toast("Rest over");
-      beep();
+      if(!fromBg && !document.hidden) beep();
       if(navigator.vibrate) navigator.vibrate([200,80,200,80,200]);
     }
     draw();
@@ -197,9 +189,9 @@ function mark(i,ok){
   draw();
 }
 function stopT(){if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;draw()}
-document.addEventListener("visibilitychange",function(){if(!document.hidden)tick()});
-window.addEventListener("focus",tick);
-window.addEventListener("pageshow",tick);
+document.addEventListener("visibilitychange",function(){if(!document.hidden)tick(true)});
+window.addEventListener("focus",function(){tick(true)});
+window.addEventListener("pageshow",function(){tick(true)});
 function fmt(s){s=Math.max(0,s);var m=Math.floor(s/60),x=String(s%60);if(x.length<2)x="0"+x;return m+":"+x}
 function nxt(){
   if(sess.i<sess.ex.length-1){sess.i++; lastMarked=0; startRest(); draw(); return}
