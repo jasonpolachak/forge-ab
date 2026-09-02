@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-title" content="Forge"/>
 <meta name="theme-color" content="#101214"/>
-<title>Forge 0.5.0</title>
+<title>Forge 0.5.1</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:#101214;color:#f6f3ec;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:calc(16px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom))}
@@ -48,7 +48,7 @@ input{width:100%;background:#181c21;border:1px solid #3a4350;border-radius:10px;
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.5.0",K="forge-ab-v1";
+var V="0.5.1",K="forge-ab-v1";
 var D={units:"lb",rest:90,last:null,fail:{},hist:[],
 A:{name:"Workout A",ex:[
 {id:"squat",n:"Squat",s:5,r:5,inc:5,w:45},
@@ -64,7 +64,7 @@ function load(){
     var o=clone(D);["units","rest","last","fail","hist","A","B"].forEach(function(k){if(p[k]!=null)o[k]=p[k]});return o;
   }catch(e){return clone(D)}
 }
-var S=load(),view="home",sess=null,timer=null,left=0,lastRes=[],lastMarked=0;
+var S=load(),view="home",sess=null,timer=null,left=0,restEnds=0,lastRes=[],lastMarked=0,restTold=0;
 if(!S.rest) S.rest=90;
 function save(){try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}}
 function toast(m){var t=document.getElementById("toast");t.textContent=m;t.className="toast show";setTimeout(function(){t.className="toast"},1600)}
@@ -106,7 +106,7 @@ function start(k){
     var log=[]; for(var i=0;i<e.s;i++) log.push({r:e.r,ok:0});
     return {id:e.id,n:e.n,s:e.s,r:e.r,inc:e.inc,w:e.w,log:log};
   })};
-  left=0; lastMarked=0; view="sess"; draw();
+  left=0; restEnds=0; lastMarked=0; view="sess"; draw();
 }
 function doneCount(e){return e.log.filter(function(s){return s.ok}).length}
 function sessView(){
@@ -139,28 +139,40 @@ function sessView(){
   return html;
 }
 function chg(i,d){sess.ex[sess.i].log[i].r=Math.max(0,sess.ex[sess.i].log[i].r+d);draw()}
-function mark(i,ok){
-  sess.ex[sess.i].log[i].ok=ok;
-  lastMarked=i;
-  if(timer)clearInterval(timer);
-  left=S.rest||90;
-  timer=setInterval(function(){
-    left--;
-    var c=document.getElementById("clock");
-    if(c) c.textContent=fmt(Math.max(0,left));
-    if(left<=0){
-      stopT();
+function tick(){
+  if(!restEnds){left=0;return}
+  left=Math.max(0,Math.round((restEnds-Date.now())/1000));
+  var c=document.getElementById("clock");
+  if(c) c.textContent=fmt(left);
+  if(left<=0){
+    restEnds=0;
+    if(timer){clearInterval(timer);timer=null}
+    if(!restTold){
+      restTold=1;
       toast("Rest over — next set");
       if(navigator.vibrate) navigator.vibrate([200,80,200]);
     }
-  },1000);
+    draw();
+  }
+}
+function mark(i,ok){
+  sess.ex[sess.i].log[i].ok=ok;
+  lastMarked=i;
+  restTold=0;
+  if(timer)clearInterval(timer);
+  restEnds=Date.now()+(S.rest||90)*1000;
+  left=S.rest||90;
+  timer=setInterval(tick,250);
   toast(ok===1?("Set "+(i+1)+" done"):("Set "+(i+1)+" missed"));
   draw();
 }
-function stopT(){if(timer)clearInterval(timer);timer=null;left=0;draw()}
+function stopT(){if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;draw()}
+document.addEventListener("visibilitychange",function(){if(!document.hidden)tick()});
+window.addEventListener("focus",tick);
+window.addEventListener("pageshow",tick);
 function fmt(s){s=Math.max(0,s);var m=Math.floor(s/60),x=String(s%60);if(x.length<2)x="0"+x;return m+":"+x}
 function nxt(){
-  if(sess.i<sess.ex.length-1){left=0;if(timer)clearInterval(timer);timer=null;sess.i++;draw();return}
+  if(sess.i<sess.ex.length-1){left=0;restEnds=0;if(timer)clearInterval(timer);timer=null;sess.i++;draw();return}
   lastRes=sess.ex.map(function(e){
     var hit=e.log.every(function(s){return s.ok===1&&s.r>=e.r});
     var miss=e.log.some(function(s){return s.ok===2||s.r<e.r});
