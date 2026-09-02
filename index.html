@@ -6,7 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-title" content="Forge"/>
 <meta name="theme-color" content="#101214"/>
-<title>Forge 0.6.1</title>
+<link rel="manifest" href="manifest.webmanifest"/>
+<link rel="apple-touch-icon" href="icon-192.png"/>
+<title>Forge 0.6.2</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:#101214;color:#f6f3ec;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:calc(16px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom))}
@@ -55,7 +57,7 @@ input{width:100%;background:#181c21;border:1px solid #3a4350;border-radius:10px;
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.1",K="forge-ab-v1";
+var V="0.6.2",K="forge-ab-v1";
 var D={units:"lb",rest:90,sound:0,last:null,fail:{},hist:[],
 A:{name:"Workout A",ex:[
 {id:"squat",n:"Squat",s:5,r:5,inc:5,w:45},
@@ -68,12 +70,30 @@ B:{name:"Workout B",ex:[
 function clone(o){return JSON.parse(JSON.stringify(o))}
 function load(){
   try{var p=JSON.parse(localStorage.getItem(K)||"null");if(!p)return clone(D);
-    var o=clone(D);["units","rest","sound","last","fail","hist","A","B"].forEach(function(k){if(p[k]!=null)o[k]=p[k]});return o;
+    var o=clone(D);["units","rest","sound","last","fail","hist","A","B","sess"].forEach(function(k){if(p[k]!=null)o[k]=p[k]});return o;
   }catch(e){return clone(D)}
 }
-var S=load(),view="home",sess=null,timer=null,left=0,restEnds=0,lastRes=[],lastMarked=0,restTold=0;
+var S=load(),view="home",sess=null,timer=null,left=0,restEnds=0,lastRes=[],lastMarked=0,restTold=0,wakeLock=null;
 if(!S.rest) S.rest=90;
 function save(){try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}}
+function persistSess(){
+  if(!sess){S.sess=null;save();return}
+  S.sess={k:sess.k,i:sess.i,ex:sess.ex,restEnds:restEnds||0,lastMarked:lastMarked};
+  save();
+}
+function keepAwake(){
+  try{
+    if(!navigator.wakeLock||!navigator.wakeLock.request)return;
+    navigator.wakeLock.request("screen").then(function(s){
+      if(wakeLock&&wakeLock!==s){try{wakeLock.release()}catch(e){}}
+      wakeLock=s;
+    }).catch(function(){});
+  }catch(e){}
+}
+function dropWake(){
+  try{if(wakeLock)wakeLock.release()}catch(e){}
+  wakeLock=null;
+}
 function toast(m){var t=document.getElementById("toast");t.textContent=m;t.className="toast show";setTimeout(function(){t.className="toast"},1600)}
 function next(){return S.last==="A"?"B":"A"}
 function u(){return S.units==="kg"?"kg":"lb"}
@@ -104,7 +124,11 @@ function home(){
     '<div class="label" style="margin-top:10px">Rest between sets (seconds)</div>'+
     '<input type="number" value="'+S.rest+'" min="30" step="15" onchange="S.rest=+this.value||90;save()">'+
     '<button class="btn btn2" onclick="toggleU()">Units: '+u()+'</button>'+
-    '<button class="btn btn2" onclick="S.sound=S.sound?0:1;save();draw()">'+(S.sound?'Rest alert: beep + vibrate':'Rest alert: vibrate only')+'</button></div>';
+    '<button class="btn btn2" onclick="S.sound=S.sound?0:1;save();draw()">'+(S.sound?'Rest alert: beep + vibrate':'Rest alert: vibrate only')+'</button>'+
+    '<button class="btn btn2" onclick="expData()">Export</button>'+
+    '<button class="btn btn2" onclick="impData()">Import</button>'+
+    '<p class="muted" style="margin-top:10px">Import if you used another link.</p>'+
+    '<button class="btn btn2" onclick="resetApp()">Reset app</button></div>';
   return html;
 }
 function step(){return S.units==="kg"?2.5:5}
@@ -123,12 +147,12 @@ function start(k){
     var log=[]; for(var i=0;i<e.s;i++) log.push({r:e.r,ok:0});
     return {id:e.id,n:e.n,s:e.s,r:e.r,inc:e.inc,w:e.w,log:log};
   })};
-  left=0; restEnds=0; lastMarked=0; view="sess"; draw();
+  left=0; restEnds=0; lastMarked=0; view="sess"; persistSess(); keepAwake(); draw();
 }
 function doneCount(e){return e.log.filter(function(s){return s.ok}).length}
 function sessView(){
   var e=sess.ex[sess.i], dc=doneCount(e);
-  var html='<div class="top"><button class="icon" onclick="if(confirm(\'Quit session?\')){sess=null;go(\'home\')}">✕</button>'+
+  var html='<div class="top"><button class="icon" onclick="quitSess()">✕</button>'+
     '<div><div class="label" style="margin:0">'+esc(S[sess.k].name)+'</div><p class="muted">'+(sess.i+1)+' of '+sess.ex.length+' lifts</p></div>'+
     '<span class="ver">v'+V+'</span></div>';
   html+='<div class="card"><div class="label">Now lifting</div><div class="name">'+esc(e.n)+'</div>'+
@@ -158,12 +182,12 @@ function sessView(){
   }
   return html;
 }
-function chg(i,d){sess.ex[sess.i].log[i].r=Math.max(0,sess.ex[sess.i].log[i].r+d);draw()}
+function chg(i,d){sess.ex[sess.i].log[i].r=Math.max(0,sess.ex[sess.i].log[i].r+d);persistSess();draw()}
 function adjW(d){
   var e=sess.ex[sess.i];
   e.w=Math.max(0,Math.round((+e.w+d)*2)/2);
   bump(e.id,function(x){x.w=e.w});
-  save();
+  persistSess();
   toast(e.n+" "+e.w+" "+u());
   draw();
 }
@@ -190,6 +214,7 @@ function startRest(){
   if(timer)clearInterval(timer);
   restEnds=Date.now()+(S.rest||90)*1000;
   left=S.rest||90;
+  persistSess();
   timer=setInterval(tick,250);
 }
 function tick(fromBg){
@@ -199,6 +224,7 @@ function tick(fromBg){
   if(c) c.textContent=fmt(left);
   if(left<=0){
     restEnds=0;
+    persistSess();
     if(timer){clearInterval(timer);timer=null}
     if(!restTold){
       restTold=1;
@@ -216,8 +242,12 @@ function mark(i,ok){
   toast(ok===1?("Set "+(i+1)+" done"):("Set "+(i+1)+" missed"));
   draw();
 }
-function stopT(){if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;draw()}
-document.addEventListener("visibilitychange",function(){if(!document.hidden)tick(true)});
+function stopT(){if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;persistSess();draw()}
+document.addEventListener("visibilitychange",function(){
+  if(document.hidden){dropWake();return}
+  tick(true);
+  if(sess&&view==="sess")keepAwake();
+});
 window.addEventListener("focus",function(){tick(true)});
 window.addEventListener("pageshow",function(){tick(true)});
 function fmt(s){s=Math.max(0,s);var m=Math.floor(s/60),x=String(s%60);if(x.length<2)x="0"+x;return m+":"+x}
@@ -245,7 +275,7 @@ function nxt(){
     })
   });
   S.hist=S.hist.slice(0,40);
-  save(); sess=null; view="done"; draw();
+  S.sess=null; save(); sess=null; dropWake(); view="done"; draw();
 }
 function doneView(){
   var html=header("Saved",1)+'<div class="card">';
@@ -269,7 +299,6 @@ function editView(k){
       '<button class="btn btn2" onclick="S.'+k+'.ex.splice('+i+',1);save();draw()">Remove lift</button>';
   });
   html+='<button class="btn" onclick="S.'+k+'.ex.push({id:\'ex\'+Math.random().toString(36).slice(2,7),n:\'New lift\',s:3,r:8,inc:5,w:'+(S.units==="kg"?20:45)+'});save();draw()">+ Add lift</button></div>';
-  html+='<button class="btn btn2" onclick="if(confirm(\'Reset all data?\')){S=clone(D);save();go(\'home\')}">Reset app</button>';
   return html;
 }
 function histView(){
@@ -385,6 +414,69 @@ function progView(){
   html+='<button class="btn" onclick="go(\'hist\')">Open history</button><button class="btn btn2" onclick="go(\'home\')">Back home</button>';
   return html;
 }
+function quitSess(){
+  if(!confirm("Quit session?"))return;
+  dropWake();
+  if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;
+  sess=null;S.sess=null;save();go("home");
+}
+function resetApp(){
+  if(!confirm("Reset all data?"))return;
+  dropWake();
+  if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;
+  sess=null;lastRes=[];S=clone(D);save();go("home");
+}
+function expData(){
+  try{
+    var blob=new Blob([localStorage.getItem(K)||JSON.stringify(S)],{type:"application/json"});
+    var a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="forge-ab-v1.json";
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
+  }catch(e){toast("Export failed")}
+}
+function impData(){
+  var inp=document.createElement("input");
+  inp.type="file";inp.accept="application/json,.json";
+  inp.onchange=function(){
+    var f=inp.files&&inp.files[0];if(!f)return;
+    var r=new FileReader();
+    r.onload=function(){
+      try{
+        var p=JSON.parse(r.result);
+        if(!p||typeof p!=="object"||Array.isArray(p))throw new Error("bad");
+        if(!confirm("Replace all Forge data on this device?"))return;
+        dropWake();
+        if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;sess=null;
+        var o=clone(D);
+        ["units","rest","sound","last","fail","hist","A","B"].forEach(function(k){if(p[k]!=null)o[k]=p[k]});
+        S=o;save();go("home");toast("Imported");
+      }catch(e){toast("Import failed")}
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+function restoreOpen(){
+  var p=S.sess;
+  if(!p||!p.ex||!p.ex.length)return;
+  if(p.k!=="A"&&p.k!=="B")return;
+  sess={k:p.k,i:+p.i||0,ex:p.ex};
+  if(sess.i<0||sess.i>=sess.ex.length)sess.i=0;
+  lastMarked=+p.lastMarked||0;
+  restEnds=+p.restEnds||0;
+  if(restEnds>Date.now()){
+    left=Math.max(0,Math.round((restEnds-Date.now())/1000));
+    restTold=0;
+    if(timer)clearInterval(timer);
+    timer=setInterval(tick,250);
+  }else{
+    restEnds=0;left=0;restTold=1;
+  }
+  view="sess";
+  keepAwake();
+}
 function go(v){view=v;draw()}
 function draw(){
   var a=document.getElementById("app");
@@ -398,7 +490,9 @@ function draw(){
     else if(view==="prog")a.innerHTML=progView();
   }catch(err){a.innerHTML='<div class="card">Error: '+esc(err.message)+'</div>'}
 }
+restoreOpen();
 draw();
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(function(){});
 </script>
 </body>
 </html>
