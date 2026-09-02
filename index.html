@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-title" content="Forge"/>
 <meta name="theme-color" content="#101214"/>
-<title>Forge 0.5.5</title>
+<title>Forge 0.6.0</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:#101214;color:#f6f3ec;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:calc(16px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom))}
@@ -42,13 +42,18 @@ input{width:100%;background:#181c21;border:1px solid #3a4350;border-radius:10px;
 .restbar{position:sticky;bottom:0;margin:16px -16px 0;padding:14px 16px calc(14px + env(safe-area-inset-bottom));background:#0e2a1c;border-top:2px solid #3dba7a;z-index:20}
 .restbar.go{background:#0e2a1c}
 .restbar.done{background:#2a2410;border-top-color:#f0b429}
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.stat{background:#181c21;border-radius:12px;padding:10px}
+.stat .n{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+.spark{display:flex;align-items:flex-end;gap:3px;height:44px;margin-top:10px}
+.spark i{flex:1;background:#f0b429;border-radius:2px 2px 0 0;display:block;min-width:3px;min-height:3px}
 </style>
 </head>
 <body>
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.5.5",K="forge-ab-v1";
+var V="0.6.0",K="forge-ab-v1";
 var D={units:"lb",rest:90,sound:0,last:null,fail:{},hist:[],
 A:{name:"Workout A",ex:[
 {id:"squat",n:"Squat",s:5,r:5,inc:5,w:45},
@@ -90,6 +95,7 @@ function home(){
     '<button class="btn btn2" onclick="go(\'editB\')">Edit Workout B</button></div>';
   html+='<div class="card"><div class="label">Sessions</div><p class="name">'+(S.hist.length)+'</p>'+
     '<p class="muted">'+(h?("Last: "+((S[h.k]&&S[h.k].name)||h.k)+" · "+new Date(h.at).toLocaleString()):"No sessions yet")+'</p>'+
+    '<button class="btn btn2" onclick="go(\'prog\')">Progress</button>'+
     '<button class="btn btn2" onclick="go(\'hist\')">Workout history</button>'+
     '<div class="label" style="margin-top:10px">Rest between sets (seconds)</div>'+
     '<input type="number" value="'+S.rest+'" min="30" step="15" onchange="S.rest=+this.value||90;save()">'+
@@ -212,7 +218,7 @@ function nxt(){
     at:Date.now(),
     lifts:sess.ex.map(function(e){
       return {
-        n:e.n,w:e.w,s:e.s,r:e.r,
+        id:e.id,n:e.n,w:e.w,s:e.s,r:e.r,
         sets:e.log.map(function(s){return {r:s.r,ok:s.ok}}),
         hit:e.log.every(function(s){return s.ok===1&&s.r>=e.r})
       };
@@ -225,7 +231,8 @@ function doneView(){
   var html=header("Saved",1)+'<div class="card">';
   lastRes.forEach(function(r){html+='<p style="margin:8px 0">'+esc(r.n)+' · '+(r.hit?"hit — weight up next time":"same weight")+' · '+r.w+' '+u()+'</p>'});
   html+='</div><button class="btn" onclick="go(\'home\')">Back home</button>'+
-    '<button class="btn btn2" onclick="go(\'hist\')">Workout history</button>';
+    '<button class="btn btn2" onclick="go(\'hist\')">Workout history</button>'+
+    '<button class="btn btn2" onclick="go(\'prog\')">Progress</button>';
   return html;
 }
 function editView(k){
@@ -265,6 +272,91 @@ function histView(){
   html+='<button class="btn" onclick="go(\'home\')">Back home</button>';
   return html;
 }
+function liftKey(L){
+  var raw=(L.id||"").toLowerCase();
+  if(raw==="squat"||raw==="bench"||raw==="ohp"||raw==="row"||raw==="dl") return raw;
+  var n=(L.n||"").toLowerCase();
+  if(n.indexOf("squat")>=0) return "squat";
+  if(n.indexOf("bench")>=0) return "bench";
+  if(n.indexOf("row")>=0) return "row";
+  if(n.indexOf("dead")>=0) return "dl";
+  if(n.indexOf("overhead")>=0||n.indexOf("press")>=0) return "ohp";
+  return n.replace(/[^a-z0-9]+/g,"");
+}
+function e1rm(w,r){r=+r||5;w=+w||0;return Math.round(w*(1+r/30))}
+function volOf(L){
+  if(!L) return 0;
+  if(L.sets&&L.sets.length) return L.sets.reduce(function(t,s){return t+(+L.w||0)*(+s.r||0)},0);
+  return (+L.w||0)*(+L.s||0)*(+L.r||0);
+}
+function inDays(at,n){return (Date.now()-at)<n*86400000}
+function spark(vals){
+  if(!vals.length) return '<p class="muted">No logged sets yet. Finish workouts to fill the chart.</p>';
+  var mx=Math.max.apply(null,vals.concat([1]));
+  return '<div class="spark">'+vals.map(function(v){return '<i style="height:'+Math.max(4,Math.round(40*v/mx))+'px"></i>'}).join("")+'</div>';
+}
+function currentW(id){
+  var w=0;
+  ["A","B"].forEach(function(k){S[k].ex.forEach(function(e){if(e.id===id)w=e.w})});
+  return w;
+}
+function progView(){
+  var week=S.hist.filter(function(h){return inDays(h.at,7)}).length;
+  var month=S.hist.filter(function(h){return inDays(h.at,30)}).length;
+  var sq=currentW("squat"), bp=currentW("bench"), dl=currentW("dl");
+  var total=sq+bp+dl;
+  var by={};
+  S.hist.slice().reverse().forEach(function(h){
+    if(!h.lifts) return;
+    h.lifts.forEach(function(L){
+      var k=liftKey(L); if(!k) return;
+      if(!by[k]) by[k]={n:L.n,id:L.id,pts:[],pr:0,last:null,vol:[]};
+      by[k].n=L.n;
+      by[k].pts.push(+L.w||0);
+      by[k].vol.push(volOf(L));
+      if((+L.w||0)>by[k].pr) by[k].pr=+L.w;
+      by[k].last=L;
+    });
+  });
+  var html=header("Progress",1)+
+    '<div class="card"><div class="label">Consistency</div><div class="stats">'+
+    '<div class="stat"><div class="label">Week</div><div class="n">'+week+'</div></div>'+
+    '<div class="stat"><div class="label">30 days</div><div class="n">'+month+'</div></div>'+
+    '<div class="stat"><div class="label">All</div><div class="n">'+S.hist.length+'</div></div></div>'+
+    '<p class="muted" style="margin-top:8px">StrongLifts-style 5×5 works best at about 3 sessions a week.</p></div>'+
+    '<div class="card"><div class="label">Powerlifting total</div><div class="name">'+total+' '+u()+'</div>'+
+    '<p class="muted">Squat '+sq+' + bench '+bp+' + deadlift '+dl+' (current working weights)</p></div>';
+  var ids=["squat","bench","ohp","row","dl"];
+  var names={squat:"Squat",bench:"Bench Press",ohp:"Overhead Press",row:"Barbell Row",dl:"Deadlift"};
+  ids.forEach(function(id){
+    var cur=currentW(id), g=by[id]||{n:names[id],pts:[],pr:cur,last:null,vol:[]};
+    if(!g.pr) g.pr=cur;
+    var last=g.last;
+    var reps=last&&last.sets&&last.sets.length?Math.max.apply(null,last.sets.map(function(s){return +s.r||0})):5;
+    var est=e1rm(cur|| (last&&last.w) ||0, reps);
+    var lastVol=g.vol.length?g.vol[g.vol.length-1]:0;
+    html+='<div class="card"><div class="label">'+esc(g.n||names[id])+'</div>'+
+      '<div class="stats">'+
+      '<div class="stat"><div class="label">Now</div><div class="n">'+(cur||"—")+'</div></div>'+
+      '<div class="stat"><div class="label">Best</div><div class="n">'+(g.pr||"—")+'</div></div>'+
+      '<div class="stat"><div class="label">e1RM</div><div class="n">'+est+'</div></div></div>'+
+      '<p class="muted" style="margin-top:8px">Last volume '+(lastVol?lastVol+" "+u():"n/a")+' · weight over time</p>'+
+      spark(g.pts)+
+      '</div>';
+  });
+  Object.keys(by).forEach(function(k){
+    if(ids.indexOf(k)>=0) return;
+    var g=by[k], last=g.last, reps=last&&last.sets?Math.max.apply(null,last.sets.map(function(s){return +s.r||0})):5;
+    html+='<div class="card"><div class="label">'+esc(g.n)+'</div>'+
+      '<div class="stats"><div class="stat"><div class="label">Best</div><div class="n">'+g.pr+'</div></div>'+
+      '<div class="stat"><div class="label">e1RM</div><div class="n">'+e1rm(g.pr,reps)+'</div></div>'+
+      '<div class="stat"><div class="label">Logs</div><div class="n">'+g.pts.length+'</div></div></div>'+
+      spark(g.pts)+'</div>';
+  });
+  html+='<p class="muted">e1RM is an estimate from Epley (weight × (1 + reps/30)). Charts use logged sessions only. Today\'s session may only have a date until the next finish after this update.</p>';
+  html+='<button class="btn" onclick="go(\'hist\')">Open history</button><button class="btn btn2" onclick="go(\'home\')">Back home</button>';
+  return html;
+}
 function go(v){view=v;draw()}
 function draw(){
   var a=document.getElementById("app");
@@ -275,6 +367,7 @@ function draw(){
     else if(view==="editA")a.innerHTML=editView("A");
     else if(view==="editB")a.innerHTML=editView("B");
     else if(view==="hist")a.innerHTML=histView();
+    else if(view==="prog")a.innerHTML=progView();
   }catch(err){a.innerHTML='<div class="card">Error: '+esc(err.message)+'</div>'}
 }
 draw();
