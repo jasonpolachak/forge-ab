@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.6</title>
+<title>Forge 0.6.7</title>
 <style>
 :root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
@@ -79,7 +79,7 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.6",K="forge-ab-v1";
+var V="0.6.7",K="forge-ab-v1";
 var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear"];
 var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],programId:null,goal:null,daysWk:null,gear:null,
 A:{name:"Workout A",ex:[
@@ -377,6 +377,7 @@ function quizView(){
       '<button class="btn btn2" onclick="history.back()">Back</button>';
   }
   html+='</div>';
+  html+=impCtl();
   return html;
 }
 function ans(k,v){
@@ -421,7 +422,12 @@ function pickView(){
     html+='<div class="card park"><div class="label">Coming</div><div class="name">'+esc(p.name)+'</div>'+
       '<p class="why">Coming — needs working-max math we don\'t have yet.</p></div>';
   });
+  html+=impCtl();
   return html;
+}
+function impCtl(){
+  return '<div class="card"><button class="btn btn2" onclick="impData()">Import</button>'+
+    '<p class="muted" style="margin-top:10px">Restores a Forge JSON from this phone (export/email/Files).</p></div>';
 }
 function step(){return S.units==="kg"?2.5:5}
 function setW(k,i,v){
