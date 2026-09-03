@@ -840,7 +840,7 @@ function logView(){
     if(L.optional && !named){ html+='</div>'; return; }
     html+='<div class="row">'+
       '<button class="icon" onclick="nudgeLog('+i+',-step())">−'+step()+'</button>'+
-      '<input type="number" inputmode="decimal" step="0.5" value="'+L.w+'" onchange="setLogW('+i+',this.value)">'+
+      '<input type="number" inputmode="decimal" step="0.5" value="'+L.w+'" oninput="setLogW('+i+',this.value)" onchange="setLogW('+i+',this.value)">'+
       '<div class="unit">'+u()+'</div>'+
       '<button class="icon" onclick="nudgeLog('+i+',step())">+'+step()+'</button></div>'+
       '<div class="set '+(L.hit?'hit':'miss')+'"><div class="tag">'+(L.hit?'HIT':'MISS')+'</div><div></div>'+
