@@ -2,8 +2,13 @@
 
 Personal A/B strength tracker.
 
-Open in Safari:
-https://htmlpreview.github.io/?https://github.com/jasonpolachak/forge-ab/blob/main/index.html
+Open in the gym:
+https://jasonpolachak.github.io/forge-ab/
 
-Or:
-https://cdn.jsdelivr.net/gh/jasonpolachak/forge-ab@main/index.html
+Add to Home Screen from that URL. After the first visit it works offline.
+
+If you used htmlpreview or jsDelivr before, export there and import here (Sessions card). The first open on GitHub Pages is an empty origin.
+
+## GitHub Pages
+
+This repo is a static site at the repository root. In **Settings → Pages**, set **Source** to **Deploy from a branch**, branch **`main`**, folder **`/ (root)`**. A pull request cannot flip that setting.
