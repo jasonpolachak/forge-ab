@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.4</title>
+<title>Forge 0.6.5</title>
 <style>
 :root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
@@ -69,30 +69,144 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 .wd span{text-align:center;font-size:10px;font-weight:800;letter-spacing:.04em;color:var(--muted);text-transform:uppercase}
 .wbig{font-size:48px;font-weight:800;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1}
 .wrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0}
+.why{color:var(--muted);font-size:13px;line-height:1.45;margin:8px 0 0}
+.quiet{display:block;width:auto;padding:8px 0 0;border:0;background:transparent;color:var(--muted);font-weight:700;font-size:13px}
+.park .name{font-size:18px}
 </style>
 </head>
 <body>
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.4",K="forge-ab-v1";
-var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],
+var V="0.6.5",K="forge-ab-v1";
+var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear"];
+var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],programId:null,goal:null,daysWk:null,gear:null,
 A:{name:"Workout A",ex:[
-{id:"squat",n:"Squat",s:5,r:5,inc:5,w:45},
-{id:"bench",n:"Bench Press",s:5,r:5,inc:5,w:45},
-{id:"row",n:"Barbell Row",s:5,r:5,inc:5,w:65}]},
+{id:"squat",n:"Squat",s:5,r:5,inc:5,w:45,seed:"bar"},
+{id:"bench",n:"Bench Press",s:5,r:5,inc:5,w:45,seed:"bar"},
+{id:"row",n:"Barbell Row",s:5,r:5,inc:5,w:65,seed:"bar"}]},
 B:{name:"Workout B",ex:[
-{id:"squat",n:"Squat",s:5,r:5,inc:5,w:45},
-{id:"ohp",n:"Overhead Press",s:5,r:5,inc:5,w:45},
-{id:"dl",n:"Deadlift",s:1,r:5,inc:10,w:95}]}};
+{id:"squat",n:"Squat",s:5,r:5,inc:5,w:45,seed:"bar"},
+{id:"ohp",n:"Overhead Press",s:5,r:5,inc:5,w:45,seed:"bar"},
+{id:"dl",n:"Deadlift",s:1,r:5,inc:10,w:95,seed:"bar"}]}};
+var PARKED=[
+  {id:"madcow-5x5",name:"Madcow 5×5"},
+  {id:"531-beginner",name:"5/3/1 Beginner"}
+];
+var ALL_IDS=["stronglifts-5x5","starting-strength","greyskull-lp","gzclp","upper-lower","upper-lower-db","ppl","ppl-db","db-full-body","bodyweight","bodyweight-3d"];
 function clone(o){return JSON.parse(JSON.stringify(o))}
+function X(id,n,s,r,inc,w,opt){
+  var e={id:id,n:n,s:s,r:r,inc:inc,w:w};
+  if(opt) Object.keys(opt).forEach(function(k){e[k]=opt[k]});
+  return e;
+}
+function custom(day){return X("custom_"+day,"",3,8,0,0,{prog:"log",optional:1})}
+function bar(id,n,s,r,inc,w){return X(id,n,s,r,inc,w,{seed:"bar",prog:"linear"})}
+function dbx(id,n,s,r,inc,w){return X(id,n,s,r,inc,w==null?10:w,{seed:"db",prog:"linear",floor:10})}
+function bw(id,n){return X(id,n,3,8,5,0,{seed:"bw",prog:"bw",repCap:12,rFloor:5})}
+function pull(id,n,cap){return X(id,n,3,8,5,0,{seed:"bw",prog:"pullup",repCap:cap||12,rFloor:5,floor:0})}
+function day(name,ex){return {name:name,ex:ex}}
+var PROGRAMS={
+  "stronglifts-5x5":{name:"StrongLifts 5×5",blurb:"A/B. Squat, bench, row / squat, OHP, deadlift 1×5. Linear +5, deadlift +10.",
+    make:function(){return {
+      A:day("Workout A",[bar("squat","Squat",5,5,5,45),bar("bench","Bench Press",5,5,5,45),bar("row","Barbell Row",5,5,5,65),custom("A")]),
+      B:day("Workout B",[bar("squat","Squat",5,5,5,45),bar("ohp","Overhead Press",5,5,5,45),bar("dl","Deadlift",1,5,10,95),custom("B")])
+    }}},
+  "starting-strength":{name:"Starting Strength",blurb:"A/B. Squat/bench/deadlift · squat/OHP/power clean. Squat and deadlift +10.",
+    make:function(){return {
+      A:day("Workout A",[bar("squat","Squat",3,5,10,45),bar("bench","Bench Press",3,5,5,45),bar("dl","Deadlift",1,5,10,95),custom("A")]),
+      B:day("Workout B",[bar("squat","Squat",3,5,10,45),bar("ohp","Overhead Press",3,5,5,45),bar("pc","Power Clean",5,3,5,45),custom("B")])
+    }}},
+  "greyskull-lp":{name:"Greyskull LP",blurb:"A/B. 2×5 + AMRAP. Hit if last ≥5. Chin-ups: reps then load.",
+    make:function(){
+      var am={lastAmrap:1,prog:"gslp",seed:"bar"};
+      return {
+        A:day("Workout A",[X("squat","Squat",3,5,10,45,am),X("bench","Bench Press",3,5,5,45,am),pull("chin","Chin-up",8),custom("A")]),
+        B:day("Workout B",[X("ohp","Overhead Press",3,5,5,45,am),X("dl","Deadlift",1,5,10,95,am),pull("chin","Chin-up",8),custom("B")])
+      };
+    }},
+  "gzclp":{name:"GZCLP",blurb:"A/B/C. T1 5×3 last AMRAP, T2 3×10, T3 log-only. Real C day.",
+    make:function(){
+      function t1(id,n,inc,w){return X(id,n,5,3,inc,w,{seed:"bar",prog:"t1",lastAmrap:1})}
+      function t2(id,n,w){return X(id,n,3,10,5,w,{seed:"bar",prog:"t2",t2r:10})}
+      function t3(id,n,seed,w){return X(id,n,3,15,0,w,{seed:seed,prog:"log"})}
+      return {
+        A:day("Workout A",[t1("squat_t1","Squat (T1)",10,45),t2("bench_t2","Bench Press (T2)",45),t3("lat","Lat pulldown","bw",0),custom("A")]),
+        B:day("Workout B",[t1("ohp_t1","Overhead Press (T1)",5,45),t2("dl_t2","Deadlift (T2)",95),t3("dbrow_t3","DB row","db",10),custom("B")]),
+        C:day("Workout C",[t1("bench_t1","Bench Press (T1)",5,45),t2("squat_t2","Squat (T2)",45),t3("lat","Lat pulldown","bw",0),custom("C")])
+      };
+    }},
+  "upper-lower":{name:"Upper/Lower",blurb:"Upper: bench 5×5, OHP 3×8, row 5×5. Lower: squat 5×5, deadlift 1×5.",
+    make:function(){return {
+      A:day("Upper",[bar("bench","Bench Press",5,5,5,45),bar("ohp","Overhead Press",3,8,5,45),bar("row","Barbell Row",5,5,5,65),custom("A")]),
+      B:day("Lower",[bar("squat","Squat",5,5,5,45),bar("dl","Deadlift",1,5,10,95),custom("B")])
+    }}},
+  "upper-lower-db":{name:"Upper/Lower (dumbbells)",blurb:"DB bench, OHP, row / goblet squat, DB deadlift. Floor 10 lb.",
+    make:function(){return {
+      A:day("Upper",[dbx("bench","DB Bench",5,5,5),dbx("ohp","DB Overhead Press",3,8,5),dbx("row","DB Row",5,5,5),custom("A")]),
+      B:day("Lower",[dbx("squat","Goblet Squat",5,5,5),dbx("dl","DB Deadlift",1,5,5),custom("B")])
+    }}},
+  "ppl":{name:"Push/Pull/Legs",blurb:"Push, pull, legs rotating. Real C day. Pull-ups: reps then load.",
+    make:function(){return {
+      A:day("Push",[bar("bench","Bench Press",5,5,5,45),bar("ohp","Overhead Press",3,8,5,45),custom("A")]),
+      B:day("Pull",[pull("pullup","Pull-up",12),bar("row","Barbell Row",5,5,5,65),custom("B")]),
+      C:day("Legs",[bar("squat","Squat",5,5,5,45),bar("dl","Deadlift",1,5,10,95),custom("C")])
+    }}},
+  "ppl-db":{name:"Push/Pull/Legs (dumbbells)",blurb:"DB press and goblet. Pull-ups stay. Floor 10 lb except pull-ups.",
+    make:function(){return {
+      A:day("Push",[dbx("bench","DB Bench",5,5,5),dbx("ohp","DB Overhead Press",3,8,5),custom("A")]),
+      B:day("Pull",[pull("pullup","Pull-up",12),dbx("row","DB Row",5,5,5),custom("B")]),
+      C:day("Legs",[dbx("squat","Goblet Squat",5,5,5),dbx("dl","DB Deadlift",1,5,5),custom("C")])
+    }}},
+  "db-full-body":{name:"Full-body dumbbell",blurb:"A: goblet, DB bench, DB row. B: DB RDL, DB OHP, reverse lunge. 3×8.",
+    make:function(){return {
+      A:day("Workout A",[dbx("squat","Goblet Squat",3,8,5),dbx("bench","DB Bench",3,8,5),dbx("row","DB Row",3,8,5),custom("A")]),
+      B:day("Workout B",[dbx("rdl","DB RDL",3,8,5),dbx("ohp","DB Overhead Press",3,8,5),dbx("lunge","Reverse Lunge",3,8,5),custom("B")])
+    }}},
+  "bodyweight":{name:"Bodyweight strength",blurb:"A/B. 3×8, reps then load. Start not tested.",
+    make:function(){return {
+      A:day("Workout A",[bw("bw_squat","Squat"),bw("pushup","Push-up"),pull("pullup","Pull-up",12),custom("A")]),
+      B:day("Workout B",[bw("lunge","Reverse Lunge"),bw("pike","Pike Push-up"),bw("invrow","Inverted Row"),custom("B")])
+    }}},
+  "bodyweight-3d":{name:"Bodyweight strength (3-day)",blurb:"A/B plus C for 5–6 days. Glute bridge, dip, pull-up on C.",
+    make:function(){
+      var t=PROGRAMS.bodyweight.make();
+      t.C=day("Workout C",[bw("glute","Glute Bridge"),bw("dip","Dip"),pull("pullup","Pull-up",12),custom("C")]);
+      return t;
+    }}
+};
+function skipQuiz(p){
+  if(!p||typeof p!=="object") return false;
+  if(p.programId) return true;
+  if(p.hist&&p.hist.length) return true;
+  if(p.last) return true;
+  if(p.A&&p.A.ex&&p.A.ex.length) return true;
+  if(p.B&&p.B.ex&&p.B.ex.length) return true;
+  return false;
+}
+function mergeSave(p){
+  var o=clone(D);
+  SAVE_KEYS.forEach(function(k){if(p&&p[k]!=null)o[k]=p[k]});
+  if(!o.rest) o.rest=90;
+  if(skipQuiz(p)&&!o.programId) o.programId="stronglifts-5x5";
+  if(!o.C) delete o.C;
+  return o;
+}
+function loadRaw(){
+  try{return JSON.parse(localStorage.getItem(K)||"null")}catch(e){return null}
+}
 function load(){
-  try{var p=JSON.parse(localStorage.getItem(K)||"null");if(!p)return clone(D);
-    var o=clone(D);["units","rest","sound","last","theme","graph","fail","hist","A","B","sess"].forEach(function(k){if(p[k]!=null)o[k]=p[k]});return o;
-  }catch(e){return clone(D)}
+  var p=loadRaw();
+  if(!p) return clone(D);
+  return mergeSave(p);
 }
 var S=load(),view="home",sess=null,timer=null,left=0,restEnds=0,lastRes=[],lastMarked=0,restTold=0,wakeLock=null;
+var quiz={step:1,goal:null,daysWk:null,gear:null},pickFrom="onboard";
 if(!S.rest) S.rest=90;
+var rawBoot=loadRaw();
+if(!rawBoot) view="quiz";
+else if(!skipQuiz(rawBoot)) view="quiz";
+else if(!rawBoot.programId){S.programId="stronglifts-5x5";save()}
 function save(){try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}}
 function persistSess(){
   if(!sess){S.sess=null;save();return}
@@ -113,7 +227,16 @@ function dropWake(){
   wakeLock=null;
 }
 function toast(m){var t=document.getElementById("toast");t.textContent=m;t.className="toast show";setTimeout(function(){t.className="toast"},1600)}
-function next(){return S.last==="A"?"B":"A"}
+function dayKeys(){
+  var k=["A","B"];
+  if(S.C&&S.C.ex&&S.C.ex.length) k.push("C");
+  return k;
+}
+function next(){
+  var keys=dayKeys(),i=keys.indexOf(S.last);
+  if(i<0) return keys[0];
+  return keys[(i+1)%keys.length];
+}
 function theme(){return S.theme==="gym"?"gym":"outrun"}
 function graph(){return S.graph==="e1rm"||S.graph==="vol"||S.graph==="reps"?S.graph:"w"}
 function applyTheme(){
@@ -124,26 +247,95 @@ function applyTheme(){
 }
 function toggleTheme(){S.theme=theme()==="outrun"?"gym":"outrun";save();applyTheme();draw()}
 function u(){return S.units==="kg"?"kg":"lb"}
-function esc(s){return String(s).replace(/[&<>"]/g,function(c){return ({"&":"&","<":"<",">":">",'"':'"'})[c]})}
-function bump(id,fn){["A","B"].forEach(function(k){S[k].ex.forEach(function(e){if(e.id===id)fn(e)})})}
-function header(title,back){
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return c==="&"?"&"+"amp;":c==="<"? "&"+"lt;":c===">"?"&"+"gt;":"&"+"quot;"})}
+function bump(id,fn){dayKeys().forEach(function(k){S[k].ex.forEach(function(e){if(e.id===id)fn(e)})})}
+function programName(){return (PROGRAMS[S.programId]&&PROGRAMS[S.programId].name)||"StrongLifts 5×5"}
+function recommend(goal,daysWk,gear){
+  if(gear==="bb"){
+    if(daysWk==="23") return goal==="muscle"?"greyskull-lp":"stronglifts-5x5";
+    if(daysWk==="4") return "upper-lower";
+    return "ppl";
+  }
+  if(gear==="db"){
+    if(daysWk==="23") return "db-full-body";
+    if(daysWk==="4") return "upper-lower-db";
+    return "ppl-db";
+  }
+  return daysWk==="56"?"bodyweight-3d":"bodyweight";
+}
+function eightIds(){
+  var g=S.gear||quiz.gear||"bb";
+  var d=S.daysWk||quiz.daysWk||"23";
+  return ["stronglifts-5x5","starting-strength","greyskull-lp","gzclp",
+    g==="db"?"upper-lower-db":"upper-lower",
+    g==="db"?"ppl-db":"ppl",
+    "db-full-body",
+    d==="56"?"bodyweight-3d":"bodyweight"];
+}
+function applyProgram(id){
+  var p=PROGRAMS[id]; if(!p) return;
+  var t=p.make();
+  S.programId=id;
+  S.A=t.A; S.B=t.B;
+  if(t.C) S.C=t.C; else delete S.C;
+  S.fail={}; S.last=null; S.sess=null; sess=null;
+  save();
+}
+function chooseProgram(id){
+  if(!PROGRAMS[id]) return;
+  if(pickFrom==="change"){
+    if(!confirm("Switch to "+PROGRAMS[id].name+"? History stays on this phone. Lifts become the new template. Current working weights for this program are replaced.")) return;
+  }
+  applyProgram(id);
+  view="home"; draw();
+  toast(PROGRAMS[id].name);
+}
+function goPick(){pickFrom="change";view="pick";draw()}
+function scheme(e){
+  if(e.lastAmrap&&e.s>1) return (e.s-1)+"×"+e.r+" + AMRAP";
+  if(e.lastAmrap&&e.s===1) return "1×AMRAP ("+e.r+"+)";
+  return e.s+"×"+e.r;
+}
+function seedNote(e){
+  if(!e) return "";
+  if(e.seed==="bar"&&e.w===45&&(e.id==="squat"||e.id==="bench"||e.id==="ohp"||e.id==="pc"||e.id==="squat_t1"||e.id==="bench_t1"||e.id==="ohp_t1"||e.id==="bench_t2"||e.id==="squat_t2")) return "empty bar";
+  if(e.seed==="bar"&&e.id==="row"&&e.w===65) return "empty bar";
+  if(e.seed==="bar"&&(e.id==="dl"||e.id==="dl_t2")&&e.w===95) return "empty bar";
+  if((e.seed==="bw"||e.prog==="pullup"||e.prog==="bw")&&!e.w) return "not tested";
+  return "";
+}
+function header(title,back,sub){
   return '<div class="top"><div class="brand">'+(back?'<button class="icon" onclick="go(\'home\')">←</button>':'<div class="logo">F</div>')+
-    '<div><h1>'+title+'</h1><small>Two workouts. Add weight.</small></div></div><span class="ver">v'+V+'</span></div>';
+    '<div><h1>'+esc(title)+'</h1><small>'+esc(sub||programName())+'</small></div></div><span class="ver">v'+V+'</span></div>';
+}
+function liftBlock(k,e,i){
+  var note=seedNote(e);
+  var html='<div class="label" style="margin-top:10px">'+(e.optional?'Custom (optional)':esc(e.n||"Custom"))+' · '+scheme(e)+'</div>';
+  if(e.optional){
+    html+='<input placeholder="Name this lift to add it" value="'+esc(e.n)+'" onchange="S.'+k+'.ex['+i+'].n=this.value;save();draw()">';
+    if(!e.n) return html;
+  }
+  html+='<div class="row">'+
+    '<button class="icon" onclick="nudge(\''+k+'\','+i+',-step())">−'+step()+'</button>'+
+    '<input type="number" inputmode="decimal" step="0.5" value="'+e.w+'" onchange="setW(\''+k+'\','+i+',this.value)">'+
+    '<div class="unit">'+u()+'</div>'+
+    '<button class="icon" onclick="nudge(\''+k+'\','+i+',step())">+'+step()+'</button></div>';
+  if(note) html+='<p class="muted">'+note+'</p>';
+  return html;
 }
 function home(){
   var k=next(),w=S[k],h=S.hist[0]||null,html=header("Forge")+
+    '<div class="card"><div class="label">Program</div><div class="name" style="font-size:22px">'+esc(programName())+'</div>'+
+    '<button class="quiet" onclick="goPick()">Change program</button></div>'+
     '<div class="card"><div class="label">Up next</div><div class="name">'+esc(w.name)+'</div>';
-  w.ex.forEach(function(e,i){
-    html+='<div class="label" style="margin-top:10px">'+esc(e.n)+' · '+e.s+'×'+e.r+'</div><div class="row">'+
-      '<button class="icon" onclick="nudge(\''+k+'\','+i+',-step())">−'+step()+'</button>'+
-      '<input type="number" inputmode="decimal" step="0.5" value="'+e.w+'" onchange="setW(\''+k+'\','+i+',this.value)">'+
-      '<div class="unit">'+u()+'</div>'+
-      '<button class="icon" onclick="nudge(\''+k+'\','+i+',step())">+'+step()+'</button></div>';
+  w.ex.forEach(function(e,i){html+=liftBlock(k,e,i)});
+  dayKeys().forEach(function(dk){
+    html+='<button class="btn'+(dk===k?'':' btn2')+'" onclick="start(\''+dk+'\')">Start '+esc(S[dk].name)+'</button>';
   });
-  html+='<button class="btn'+(k==="A"?'':' btn2')+'" onclick="start(\'A\')">Start '+esc(S.A.name)+'</button>'+
-    '<button class="btn'+(k==="B"?'':' btn2')+'" onclick="start(\'B\')">Start '+esc(S.B.name)+'</button>'+
-    '<button class="btn btn2" onclick="go(\'editA\')">Edit Workout A</button>'+
-    '<button class="btn btn2" onclick="go(\'editB\')">Edit Workout B</button></div>';
+  dayKeys().forEach(function(dk){
+    html+='<button class="btn btn2" onclick="go(\'edit'+dk+'\')">Edit '+esc(S[dk].name)+'</button>';
+  });
+  html+='</div>';
   html+='<div class="card"><div class="label">Sessions</div><p class="name">'+(S.hist.length)+'</p>'+
     '<p class="muted">'+(h?("Last: "+((S[h.k]&&S[h.k].name)||h.k)+" · "+new Date(h.at).toLocaleString()):"No sessions yet")+'</p>'+
     '<button class="btn btn2" onclick="go(\'prog\')">Progress</button>'+
@@ -160,6 +352,75 @@ function home(){
     '<button class="btn btn2" onclick="resetApp()">Reset app</button></div>';
   return html;
 }
+function quizView(){
+  var html=header("Forge",0,"Three questions");
+  html+='<div class="card">';
+  if(quiz.step===1){
+    html+='<div class="label">Question 1 of 3</div><div class="name">Goal</div>'+
+      '<p class="why">One tap. You can pick a different program next.</p>'+
+      '<button class="btn" onclick="ans(\'goal\',\'strength\')">Get stronger</button>'+
+      '<button class="btn btn2" onclick="ans(\'goal\',\'muscle\')">Build muscle</button>'+
+      '<button class="btn btn2" onclick="ans(\'goal\',\'general\')">General fitness</button>';
+  } else if(quiz.step===2){
+    html+='<div class="label">Question 2 of 3</div><div class="name">Days / week</div>'+
+      '<button class="btn" onclick="ans(\'daysWk\',\'23\')">2–3</button>'+
+      '<button class="btn btn2" onclick="ans(\'daysWk\',\'4\')">4</button>'+
+      '<button class="btn btn2" onclick="ans(\'daysWk\',\'56\')">5–6</button>'+
+      '<button class="btn btn2" onclick="quiz.step=1;draw()">Back</button>';
+  } else {
+    html+='<div class="label">Question 3 of 3</div><div class="name">Equipment</div>'+
+      '<button class="btn" onclick="ans(\'gear\',\'bb\')">Barbell + rack</button>'+
+      '<button class="btn btn2" onclick="ans(\'gear\',\'db\')">Dumbbells</button>'+
+      '<button class="btn btn2" onclick="ans(\'gear\',\'bw\')">Bodyweight only</button>'+
+      '<button class="btn btn2" onclick="quiz.step=2;draw()">Back</button>';
+  }
+  html+='</div>';
+  return html;
+}
+function ans(k,v){
+  quiz[k]=v;
+  if(k==="goal") quiz.step=2;
+  else if(k==="daysWk") quiz.step=3;
+  else {
+    S.goal=quiz.goal; S.daysWk=quiz.daysWk; S.gear=quiz.gear;
+    pickFrom="onboard"; view="pick";
+  }
+  draw();
+}
+function recWhy(){
+  var g=S.goal||quiz.goal,d=S.daysWk||quiz.daysWk,eq=S.gear||quiz.gear;
+  var gl={strength:"get stronger",muscle:"build muscle",general:"general fitness"};
+  var dl={"23":"2–3 days", "4":"4 days", "56":"5–6 days"};
+  var el={bb:"barbell",db:"dumbbells",bw:"bodyweight"};
+  return (gl[g]||"")+" · "+(dl[d]||"")+" · "+(el[eq]||"");
+}
+function pickCard(id,big){
+  var p=PROGRAMS[id]; if(!p) return "";
+  var html='<div class="card"><div class="label">'+(big?"Recommended":"Program")+'</div>'+
+    '<div class="name"'+(big?"":' style="font-size:20px"')+'>'+esc(p.name)+'</div>'+
+    '<p class="why">'+esc(p.blurb)+'</p>';
+  if(big) html+='<p class="why">'+esc(recWhy())+'</p>';
+  html+='<button class="btn'+(big?"":" btn2")+'" onclick="chooseProgram(\''+id+'\')">'+(big?"Start "+p.name:"Use this")+'</button></div>';
+  return html;
+}
+function pickView(){
+  var rec=recommend(S.goal||quiz.goal,S.daysWk||quiz.daysWk,S.gear||quiz.gear);
+  var ids=pickFrom==="change"?ALL_IDS.slice():eightIds();
+  var html='<div class="top"><div class="brand">'+(pickFrom==="change"?'<button class="icon" onclick="go(\'home\')">←</button>':'<div class="logo">F</div>')+
+    '<div><h1>Program</h1><small>'+(pickFrom==="change"?"Change program":"Pick a plan")+'</small></div></div><span class="ver">v'+V+'</span></div>';
+  if(pickFrom==="onboard"){
+    html+=pickCard(rec,1);
+    html+='<div class="label" style="margin:8px 4px">Or pick another</div>';
+    ids.forEach(function(id){ if(id!==rec) html+=pickCard(id,0); });
+  } else {
+    ids.forEach(function(id){ html+=pickCard(id,id===S.programId); });
+  }
+  PARKED.forEach(function(p){
+    html+='<div class="card park"><div class="label">Coming</div><div class="name">'+esc(p.name)+'</div>'+
+      '<p class="why">Coming — needs working-max math we don\'t have yet.</p></div>';
+  });
+  return html;
+}
 function step(){return S.units==="kg"?2.5:5}
 function setW(k,i,v){
   v=+v; if(!isFinite(v))return;
@@ -170,30 +431,38 @@ function nudge(k,i,d){
   setW(k,i,v); draw();
 }
 function toggleU(){S.units=S.units==="lb"?"kg":"lb";save();draw()}
+function copyLift(e){
+  var log=[],i;
+  for(i=0;i<e.s;i++) log.push({r:e.r,ok:0});
+  return {id:e.id,n:e.n,s:e.s,r:e.r,inc:e.inc,w:e.w,log:log,prog:e.prog||"linear",lastAmrap:e.lastAmrap||0,repCap:e.repCap,rFloor:e.rFloor,seed:e.seed,t2r:e.t2r,floor:e.floor};
+}
 function start(k){
   var w=S[k];
-  sess={k:k,i:0,ex:w.ex.map(function(e){
-    var log=[]; for(var i=0;i<e.s;i++) log.push({r:e.r,ok:0});
-    return {id:e.id,n:e.n,s:e.s,r:e.r,inc:e.inc,w:e.w,log:log};
-  })};
+  sess={k:k,i:0,ex:w.ex.filter(function(e){return !e.optional||(e.n&&String(e.n).trim())}).map(copyLift)};
+  if(!sess.ex.length){toast("No lifts");return}
   left=0; restEnds=0; lastMarked=0; view="sess"; persistSess(); keepAwake(); draw();
 }
 function doneCount(e){return e.log.filter(function(s){return s.ok}).length}
+function wLabel(e){
+  if(e.prog==="bw"||e.prog==="pullup"||e.seed==="bw") return "Load";
+  if(e.seed==="db") return "Weight";
+  return "On the bar";
+}
 function sessView(){
   var e=sess.ex[sess.i], dc=doneCount(e);
   var html='<div class="top"><button class="icon" onclick="quitSess()">✕</button>'+
     '<div><div class="label" style="margin:0">'+esc(S[sess.k].name)+'</div><p class="muted">'+(sess.i+1)+' of '+sess.ex.length+' lifts</p></div>'+
     '<span class="ver">v'+V+'</span></div>';
   html+='<div class="card"><div class="label">Now lifting</div><div class="name">'+esc(e.n)+'</div>'+
-    '<p class="muted">'+e.s+' sets × '+e.r+' reps</p>'+
+    '<p class="muted">'+scheme(e)+(e.prog==="log"?" · log only":"")+'</p>'+
     '<div class="wrow"><button class="icon" onclick="adjW(-step())">−'+step()+'</button>'+
-    '<div><div class="label" style="margin:0;text-align:center">On the bar</div><div class="wbig">'+e.w+'</div><p class="muted" style="text-align:center">'+u()+'</p></div>'+
+    '<div><div class="label" style="margin:0;text-align:center">'+wLabel(e)+'</div><div class="wbig">'+e.w+'</div><p class="muted" style="text-align:center">'+u()+'</p></div>'+
     '<button class="icon" onclick="adjW(step())">+'+step()+'</button></div>'+
     '<div class="status"><b>'+dc+' of '+e.s+' sets logged</b><br><span class="muted">'+
     (dc<e.s?('Tap the green check after set '+(dc+1)+'.'):'All sets logged. Go to next lift.')+'</span></div></div>';
   e.log.forEach(function(s,i){
     var st=s.ok===1?'hit':s.ok===2?'miss':'';
-    var tag=s.ok===1?'DONE':s.ok===2?'MISS':('SET '+(i+1));
+    var tag=s.ok===1?'DONE':s.ok===2?'MISS':(e.lastAmrap&&i===e.log.length-1?'AMRAP':('SET '+(i+1)));
     html+='<div class="set '+st+'"><div class="tag">'+tag+'</div><div class="row" style="margin:0">'+
       '<button class="icon" onclick="chg('+i+',-1)">−</button><b>'+s.r+'</b>'+
       '<button class="icon" onclick="chg('+i+',1)">+</button></div>'+
@@ -280,16 +549,104 @@ document.addEventListener("visibilitychange",function(){
 window.addEventListener("focus",function(){tick(true)});
 window.addEventListener("pageshow",function(){tick(true)});
 function fmt(s){s=Math.max(0,s);var m=Math.floor(s/60),x=String(s%60);if(x.length<2)x="0"+x;return m+":"+x}
+function rnd(n){return Math.round(n*2)/2}
+function floorW(e){
+  if(e.floor!=null) return e.floor;
+  if(e.prog==="bw"||e.prog==="pullup"||e.prog==="log") return 0;
+  if(e.seed==="db") return 10;
+  return S.units==="kg"?20:45;
+}
+function loadStep(e){return +e.inc||step()}
+function logged(e){return e.log.some(function(s){return s.ok===1||s.ok===2})}
+function allHit(e){return e.log.every(function(s){return s.ok===1&&s.r>=e.r})}
+function anyMiss(e){return e.log.some(function(s){return s.ok===2||(s.ok===1&&s.r<e.r)})}
+function lastSet(e){return e.log[e.log.length-1]}
+function earlyMiss(e){return e.log.slice(0,-1).some(function(s){return s.ok===2||(s.ok===1&&s.r<e.r)})}
+function applyLinear(e,missN){
+  missN=missN||3;
+  if(allHit(e)){S.fail[e.id]=0;bump(e.id,function(x){x.w=rnd((+x.w)+(+x.inc||5))});return {hit:1,msg:"hit — weight up next time"}}
+  if(anyMiss(e)){
+    S.fail[e.id]=(S.fail[e.id]||0)+1;
+    if(S.fail[e.id]>=missN){bump(e.id,function(x){x.w=rnd(Math.max(floorW(x),x.w*0.9))});S.fail[e.id]=0;return {hit:0,msg:"deload"}}
+    return {hit:0,msg:"same weight"}
+  }
+  return {hit:0,msg:"skipped"}
+}
+function applyGslp(e){
+  if(!logged(e)) return {hit:0,msg:"skipped"};
+  var last=lastSet(e), ok=!earlyMiss(e)&&last.ok===1&&last.r>=5;
+  if(ok){S.fail[e.id]=0;bump(e.id,function(x){x.w=rnd((+x.w)+(+x.inc||5))});return {hit:1,msg:"hit — weight up next time"}}
+  S.fail[e.id]=(S.fail[e.id]||0)+1;
+  if(S.fail[e.id]>=2){bump(e.id,function(x){x.w=rnd(Math.max(floorW(x),x.w*0.9))});S.fail[e.id]=0;return {hit:0,msg:"deload"}}
+  return {hit:0,msg:"same weight"}
+}
+function applyT1(e){
+  if(!logged(e)) return {hit:0,msg:"skipped"};
+  var last=lastSet(e), bad=earlyMiss(e)||last.ok===2;
+  var lr=+last.r||0;
+  if(!bad&&last.ok===1&&lr>=10){S.fail[e.id]=0;bump(e.id,function(x){x.w=rnd((+x.w)+(+x.inc||5))});return {hit:1,msg:"AMRAP "+lr+" — weight up"}}
+  if(!bad&&last.ok===1&&lr>=3&&lr<=9){return {hit:0,msg:"same weight"}}
+  S.fail[e.id]=(S.fail[e.id]||0)+1;
+  if(S.fail[e.id]>=3){bump(e.id,function(x){x.w=rnd(Math.max(floorW(x),x.w*0.9))});S.fail[e.id]=0;return {hit:0,msg:"deload"}}
+  return {hit:0,msg:"same weight"}
+}
+function applyT2(e){
+  if(allHit(e)){S.fail[e.id]=0;bump(e.id,function(x){x.w=rnd((+x.w)+(+x.inc||5))});return {hit:1,msg:"hit — weight up next time"}}
+  if(anyMiss(e)){
+    S.fail[e.id]=(S.fail[e.id]||0)+1;
+    if(S.fail[e.id]>=3){
+      S.fail[e.id]=0;
+      bump(e.id,function(x){
+        var t=x.t2r||x.r||10;
+        if(t>=10){x.t2r=8;x.r=8;x.s=3}
+        else if(t>=8){x.t2r=6;x.r=6;x.s=3}
+        else {x.t2r=10;x.r=10;x.s=3;x.w=rnd(Math.max(floorW(x),x.w*0.9))}
+      });
+      return {hit:0,msg:"scheme change"}
+    }
+    return {hit:0,msg:"same weight"}
+  }
+  return {hit:0,msg:"skipped"}
+}
+function applyRepLoad(e){
+  var cap=e.repCap||12;
+  if(allHit(e)){
+    S.fail[e.id]=0;
+    bump(e.id,function(x){
+      var nr=(+x.r||8)+1, cap2=x.repCap||cap;
+      if(nr>cap2){x.r=8;x.w=rnd((+x.w||0)+loadStep(x))}
+      else x.r=nr;
+    });
+    return {hit:1,msg:"hit — reps or load up"}
+  }
+  if(anyMiss(e)){
+    S.fail[e.id]=(S.fail[e.id]||0)+1;
+    if(S.fail[e.id]>=3){
+      S.fail[e.id]=0;
+      bump(e.id,function(x){
+        if((+x.w||0)>0){x.w=rnd(Math.max(0,x.w-loadStep(x)));x.r=8}
+        else x.r=Math.max(x.rFloor||5,(+x.r||8)-1);
+      });
+      return {hit:0,msg:"deload"}
+    }
+    return {hit:0,msg:"same"}
+  }
+  return {hit:0,msg:"skipped"}
+}
+function applyLift(e){
+  var p=e.prog||"linear";
+  if(p==="log") return {hit:0,msg:"logged"};
+  if(p==="gslp") return applyGslp(e);
+  if(p==="t1") return applyT1(e);
+  if(p==="t2") return applyT2(e);
+  if(p==="bw"||p==="pullup") return applyRepLoad(e);
+  return applyLinear(e,3);
+}
 function nxt(){
   if(sess.i<sess.ex.length-1){sess.i++; lastMarked=0; startRest(); draw(); return}
   lastRes=sess.ex.map(function(e){
-    var hit=e.log.every(function(s){return s.ok===1&&s.r>=e.r});
-    var miss=e.log.some(function(s){return s.ok===2||s.r<e.r});
-    return {id:e.id,n:e.n,w:e.w,hit:hit,miss:miss};
-  });
-  lastRes.forEach(function(r){
-    if(r.hit){S.fail[r.id]=0;bump(r.id,function(e){e.w=Math.round((e.w+e.inc)*2)/2})}
-    else if(r.miss){S.fail[r.id]=(S.fail[r.id]||0)+1;if(S.fail[r.id]>=3){bump(r.id,function(e){e.w=Math.round(Math.max(S.units==="kg"?20:45,e.w*0.9)*2)/2});S.fail[r.id]=0}}
+    var r=applyLift(e);
+    return {id:e.id,n:e.n,w:e.w,hit:r.hit,msg:r.msg};
   });
   S.last=sess.k;
   S.hist.unshift({
@@ -308,14 +665,14 @@ function nxt(){
 }
 function doneView(){
   var html=header("Saved",1)+'<div class="card">';
-  lastRes.forEach(function(r){html+='<p style="margin:8px 0">'+esc(r.n)+' · '+(r.hit?"hit — weight up next time":"same weight")+' · '+r.w+' '+u()+'</p>'});
+  lastRes.forEach(function(r){html+='<p style="margin:8px 0">'+esc(r.n)+' · '+(r.msg||(r.hit?"hit — weight up next time":"same weight"))+' · '+r.w+' '+u()+'</p>'});
   html+='</div><button class="btn" onclick="go(\'home\')">Back home</button>'+
     '<button class="btn btn2" onclick="go(\'hist\')">Workout history</button>'+
     '<button class="btn btn2" onclick="go(\'prog\')">Progress</button>';
   return html;
 }
 function editView(k){
-  var w=S[k],html=header("Edit "+k,1)+'<div class="card"><div class="label">Workout name</div>'+
+  var w=S[k],html=header("Edit "+w.name,1)+'<div class="card"><div class="label">Workout name</div>'+
     '<input value="'+esc(w.name)+'" onchange="S.'+k+'.name=this.value;save()">';
   w.ex.forEach(function(e,i){
     html+='<div class="label" style="margin-top:12px">Lift '+(i+1)+'</div>'+
@@ -324,10 +681,10 @@ function editView(k){
       '<input type="number" value="'+e.r+'" onchange="S.'+k+'.ex['+i+'].r=+this.value;save()" placeholder="reps"></div>'+
       '<div class="row"><input type="number" step="0.5" value="'+e.w+'" onchange="var v=+this.value;S.'+k+'.ex['+i+'].w=v;bump(\''+e.id+'\',function(x){x.w=v});save()">'+
       '<input type="number" step="0.5" value="'+e.inc+'" onchange="S.'+k+'.ex['+i+'].inc=+this.value;save()"></div>'+
-      '<p class="muted">Weight · add when you hit all sets</p>'+
+      '<p class="muted">'+(e.prog==="log"?"Log only — no auto add":"Weight · add when you hit")+'</p>'+
       '<button class="btn btn2" onclick="S.'+k+'.ex.splice('+i+',1);save();draw()">Remove lift</button>';
   });
-  html+='<button class="btn" onclick="S.'+k+'.ex.push({id:\'ex\'+Math.random().toString(36).slice(2,7),n:\'New lift\',s:3,r:8,inc:5,w:'+(S.units==="kg"?20:45)+'});save();draw()">+ Add lift</button></div>';
+  html+='<button class="btn" onclick="S.'+k+'.ex.push({id:\'ex\'+Math.random().toString(36).slice(2,7),n:\'New lift\',s:3,r:8,inc:5,w:'+(S.units==="kg"?20:45)+',prog:\'linear\'});save();draw()">+ Add lift</button></div>';
   return html;
 }
 function histView(){
@@ -404,8 +761,9 @@ function spark(vals,big){
 function setGraph(m){S.graph=m;save();draw()}
 function programLifts(){
   var seen={}, list=[];
-  ["A","B"].forEach(function(k){
+  dayKeys().forEach(function(k){
     S[k].ex.forEach(function(e){
+      if(e.optional&&!e.n) return;
       if(seen[e.id]) return;
       seen[e.id]=1;
       list.push({id:e.id,n:e.n,w:e.w});
@@ -435,7 +793,7 @@ function weekDots(){
 }
 function currentW(id){
   var w=0;
-  ["A","B"].forEach(function(k){S[k].ex.forEach(function(e){if(e.id===id)w=e.w})});
+  dayKeys().forEach(function(k){S[k].ex.forEach(function(e){if(e.id===id)w=e.w})});
   return w;
 }
 function progView(){
@@ -467,7 +825,7 @@ function progView(){
     '<div class="stat"><div class="label">30 days</div><div class="n">'+month+'</div></div>'+
     '<div class="stat"><div class="label">All</div><div class="n">'+S.hist.length+'</div></div></div>'+
     weekDots()+
-    '<p class="muted" style="margin-top:8px">Filled circle = a finished session. StrongLifts-style 5×5 works best at about 3 sessions a week.</p></div>'+
+    '<p class="muted" style="margin-top:8px">Filled circle = a finished session. '+esc(programName())+' · rest '+ (S.rest||90) +'s.</p></div>'+
     '<div class="card"><div class="label">Powerlifting total</div><div class="name">'+total+' '+u()+'</div>'+
     '<p class="muted">Squat '+sq+' + bench '+bp+' + deadlift '+dl+' (current working weights)</p></div>'+
     '<div class="card"><div class="label">Charts</div>'+
@@ -485,7 +843,7 @@ function progView(){
     if(est==null && last && (+last.r||0)>12) est=null;
     else if(est==null && cur){
       var pr=5;
-      ["A","B"].forEach(function(k){S[k].ex.forEach(function(e){if(e.id===lift.id)pr=e.r})});
+      dayKeys().forEach(function(k){S[k].ex.forEach(function(e){if(e.id===lift.id)pr=e.r})});
       est=pr<=12?e1rm(cur,pr):null;
     }
     var lastVol=g.vol.length?g.vol[g.vol.length-1]:0;
@@ -513,7 +871,9 @@ function resetApp(){
   if(!confirm("Reset all data?"))return;
   dropWake();
   if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;
-  sess=null;lastRes=[];S=clone(D);save();go("home");
+  sess=null;lastRes=[];
+  try{localStorage.removeItem(K)}catch(e){}
+  S=clone(D); quiz={step:1,goal:null,daysWk:null,gear:null}; pickFrom="onboard"; view="quiz"; draw();
 }
 function expData(){
   try{
@@ -538,9 +898,9 @@ function impData(){
         if(!confirm("Replace all Forge data on this device?"))return;
         dropWake();
         if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;sess=null;
-        var o=clone(D);
-        ["units","rest","sound","last","theme","graph","fail","hist","A","B"].forEach(function(k){if(p[k]!=null)o[k]=p[k]});
-        S=o;save();go("home");toast("Imported");
+        S=mergeSave(p); save();
+        if(skipQuiz(p)) go("home"); else {quiz={step:1,goal:null,daysWk:null,gear:null};view="quiz";draw()}
+        toast("Imported");
       }catch(e){toast("Import failed")}
     };
     r.readAsText(f);
@@ -550,7 +910,7 @@ function impData(){
 function restoreOpen(){
   var p=S.sess;
   if(!p||!p.ex||!p.ex.length)return;
-  if(p.k!=="A"&&p.k!=="B")return;
+  if(dayKeys().indexOf(p.k)<0 && p.k!=="A"&&p.k!=="B"&&p.k!=="C")return;
   sess={k:p.k,i:+p.i||0,ex:p.ex};
   if(sess.i<0||sess.i>=sess.ex.length)sess.i=0;
   lastMarked=+p.lastMarked||0;
@@ -571,11 +931,14 @@ function draw(){
   applyTheme();
   var a=document.getElementById("app");
   try{
-    if(view==="home")a.innerHTML=home();
+    if(view==="quiz")a.innerHTML=quizView();
+    else if(view==="pick")a.innerHTML=pickView();
+    else if(view==="home")a.innerHTML=home();
     else if(view==="sess")a.innerHTML=sessView();
     else if(view==="done")a.innerHTML=doneView();
     else if(view==="editA")a.innerHTML=editView("A");
     else if(view==="editB")a.innerHTML=editView("B");
+    else if(view==="editC")a.innerHTML=editView("C");
     else if(view==="hist")a.innerHTML=histView();
     else if(view==="prog")a.innerHTML=progView();
   }catch(err){a.innerHTML='<div class="card">Error: '+esc(err.message)+'</div>'}
