@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.11</title>
+<title>Forge 0.6.12</title>
 <style>
 :root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
@@ -35,6 +35,7 @@ small{display:block;color:var(--muted);font-size:11px;font-weight:700;letter-spa
 .btn2{background:transparent;color:var(--text);border:1px solid var(--border)}
 .row{display:flex;gap:8px;align-items:center;margin-top:8px}
 input{width:100%;background:var(--well);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);font:inherit}
+.sr input{min-height:52px;font-size:22px;font-weight:800;text-align:center;flex:1}
 .set{display:grid;grid-template-columns:32px 1fr 52px 52px;gap:8px;align-items:center;background:var(--well);border:2px solid var(--border);border-radius:14px;padding:10px;margin-top:10px}
 .set.hit{background:#143322;border-color:#3dba7a}
 .set.miss{background:#3a1c18;border-color:#e15b4a}
@@ -82,7 +83,7 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.11",K="forge-ab-v1";
+var V="0.6.12",K="forge-ab-v1";
 var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear"];
 var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],programId:null,goal:null,daysWk:null,gear:null,
 A:{name:"Workout A",ex:[
@@ -116,7 +117,7 @@ function jasonTemplate(){
     A:day("Workout A",[
       bar("squat","Squat",5,5,5,45),
       bar("bench","Bench Press",5,5,5,45),
-      pull("pullup","Pull-up",12),
+      X("pullup","Pull-up",5,3,5,0,{seed:"bw",prog:"pullup",repCap:12,rFloor:5,floor:0}),
       logx("situp","Sit-ups"),
       logx("curl","Arm curls"),
       logx("swing","Kettlebell swings"),
@@ -799,12 +800,25 @@ function setLogN(i,v){
   logForm.lifts[i].n=v;
   if(logForm.lifts[i].optional) draw();
 }
+function setLogSR(i,k,v,quiet){
+  var L=logForm.lifts[i]; if(!L||(k!=="s"&&k!=="r"))return;
+  v=Math.round(+v);
+  if(!isFinite(v)||v<1){ if(!quiet) draw(); return; }
+  L[k]=v;
+  if(!quiet) draw();
+}
 function setLogW(i,v){v=+v;if(!isFinite(v)||!logForm.lifts[i])return;logForm.lifts[i].w=v}
 function nudgeLog(i,d){
   var L=logForm.lifts[i]; if(!L)return;
   L.w=Math.max(0,Math.round((+L.w+d)*2)/2); draw();
 }
 function setLogHit(i,hit){if(!logForm.lifts[i])return;logForm.lifts[i].hit=hit?1:0;draw()}
+function logSRRow(L,i){
+  return '<div class="row sr">'+
+    '<input type="number" inputmode="numeric" min="1" value="'+L.s+'" oninput="setLogSR('+i+',\'s\',this.value,1)" onchange="setLogSR('+i+',\'s\',this.value)">'+
+    '<div class="unit">×</div>'+
+    '<input type="number" inputmode="numeric" min="1" value="'+L.r+'" oninput="setLogSR('+i+',\'r\',this.value,1)" onchange="setLogSR('+i+',\'r\',this.value)"></div>';
+}
 function logView(){
   var html=header("Log past workout",1)+
     '<div class="card"><div class="label">Date</div>'+
@@ -816,12 +830,17 @@ function logView(){
   html+='</div>';
   logForm.lifts.forEach(function(L,i){
     var named=String(L.n||"").trim();
-    html+='<div class="card"><div class="label">'+(L.optional?'Custom (optional) · ':'')+scheme(L)+'</div>'+
-      '<input placeholder="Name this lift to add it" value="'+esc(L.n)+'" oninput="if(logForm.lifts['+i+'])logForm.lifts['+i+'].n=this.value" onchange="setLogN('+i+',this.value)">';
+    html+='<div class="card">';
+    if(L.optional && !named) html+='<div class="label">Custom (optional) · '+scheme(L)+'</div>';
+    else {
+      if(L.optional) html+='<div class="label">Custom (optional) · '+scheme(L)+'</div>';
+      html+=logSRRow(L,i);
+    }
+    html+='<input placeholder="Name this lift to add it" value="'+esc(L.n)+'" oninput="if(logForm.lifts['+i+'])logForm.lifts['+i+'].n=this.value" onchange="setLogN('+i+',this.value)">';
     if(L.optional && !named){ html+='</div>'; return; }
     html+='<div class="row">'+
       '<button class="icon" onclick="nudgeLog('+i+',-step())">−'+step()+'</button>'+
-      '<input type="number" inputmode="decimal" step="0.5" value="'+L.w+'" onchange="setLogW('+i+',this.value)">'+
+      '<input type="number" inputmode="decimal" step="0.5" value="'+L.w+'" oninput="setLogW('+i+',this.value)" onchange="setLogW('+i+',this.value)">'+
       '<div class="unit">'+u()+'</div>'+
       '<button class="icon" onclick="nudgeLog('+i+',step())">+'+step()+'</button></div>'+
       '<div class="set '+(L.hit?'hit':'miss')+'"><div class="tag">'+(L.hit?'HIT':'MISS')+'</div><div></div>'+
@@ -844,8 +863,9 @@ function saveLog(){
     at:at,
     lifts:lifts.map(function(L){
       var sets=[],i,hit=L.hit?1:0,n=String(L.n).trim();
-      for(i=0;i<L.s;i++) sets.push({r:L.r,ok:hit?1:2});
-      return {id:L.id,n:n,w:+L.w||0,s:L.s,r:L.r,sets:sets,hit:!!hit};
+      var s=Math.max(1,Math.round(+L.s)||1), r=Math.max(1,Math.round(+L.r)||1);
+      for(i=0;i<s;i++) sets.push({r:r,ok:hit?1:2});
+      return {id:L.id,n:n,w:+L.w||0,s:s,r:r,sets:sets,hit:!!hit};
     })
   });
   S.hist.sort(function(a,b){return (+b.at||0)-(+a.at||0)});
