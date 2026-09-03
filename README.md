@@ -1,6 +1,6 @@
 # Forge
 
-Personal strength tracker. First open on a new phone asks three questions and recommends a program. Existing `forge-ab-v1` saves keep their lifts.
+Personal strength tracker. First open: Continue 5×5, or I’m new for three questions. Existing `forge-ab-v1` saves keep their lifts.
 
 Open in the gym:
 https://jasonpolachak.github.io/forge-ab/
