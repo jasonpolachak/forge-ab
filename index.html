@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.7</title>
+<title>Forge 0.6.9</title>
 <style>
 :root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
@@ -79,7 +79,7 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.7",K="forge-ab-v1";
+var V="0.6.9",K="forge-ab-v1";
 var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear"];
 var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],programId:null,goal:null,daysWk:null,gear:null,
 A:{name:"Workout A",ex:[
@@ -201,7 +201,7 @@ function load(){
   if(!p) return clone(D);
   return mergeSave(p);
 }
-var S=load(),view="home",sess=null,timer=null,left=0,restEnds=0,lastRes=[],lastMarked=0,restTold=0,wakeLock=null;
+var S=load(),view="home",sess=null,timer=null,left=0,restEnds=0,lastRes=[],lastMarked=0,restTold=0,wakeLock=null,logForm=null;
 var quiz={step:1,goal:null,daysWk:null,gear:null},pickFrom="onboard";
 if(!S.rest) S.rest=90;
 var rawBoot=loadRaw();
@@ -342,6 +342,7 @@ function home(){
     '<p class="muted">'+(h?("Last: "+((S[h.k]&&S[h.k].name)||h.k)+" · "+new Date(h.at).toLocaleString()):"No sessions yet")+'</p>'+
     '<button class="btn btn2" onclick="go(\'prog\')">Progress</button>'+
     '<button class="btn btn2" onclick="go(\'hist\')">Workout history</button>'+
+    '<button class="quiet" onclick="openLog()">Log past workout</button>'+
     '<button class="btn btn2" onclick="expData()">Export</button>'+
     '<p class="muted" style="margin-top:10px">Saves stay on this phone. Export if you want a copy.</p>'+
     '<button class="btn btn2" onclick="impData()">Import</button>'+
@@ -698,7 +699,9 @@ function editView(k){
 }
 function histView(){
   var html=header("History",1);
-  if(!S.hist.length) html+='<div class="card"><p class="muted">No sessions saved yet.</p></div>';
+  html+='<div class="card">';
+  if(!S.hist.length) html+='<p class="muted">No sessions saved yet.</p>';
+  html+='<button class="btn" onclick="openLog()">Log past workout</button></div>';
   S.hist.forEach(function(h,hi){
     var name=(S[h.k]&&S[h.k].name)||("Workout "+h.k);
     html+='<div class="card"><div class="label">'+new Date(h.at).toLocaleString()+'</div><div class="name" style="font-size:20px">'+esc(name)+'</div>';
@@ -723,6 +726,88 @@ function fixHist(hi,li,d){
   L.w=Math.max(0,Math.round((+L.w+d)*2)/2);
   if(L.id) bump(L.id,function(x){x.w=L.w});
   save(); toast(L.n+" set to "+L.w+" "+u()); draw();
+}
+function pad2(n){n=String(n);return n.length<2?"0"+n:n}
+function ymdOf(d){return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate())}
+function yesterdayYmd(){var d=new Date();d.setDate(d.getDate()-1);return ymdOf(d)}
+function atLocalNoon(ymd){
+  var p=String(ymd||"").split("-");
+  if(p.length!==3) return NaN;
+  var y=+p[0],m=+p[1],d=+p[2];
+  if(!y||!m||!d) return NaN;
+  return new Date(y,m-1,d,12,0,0,0).getTime();
+}
+function fillLogLifts(){
+  var w=S[logForm.k];
+  if(!w||!w.ex){logForm.lifts=[];return}
+  logForm.lifts=w.ex.filter(function(e){return !e.optional||(e.n&&String(e.n).trim())}).map(function(e){
+    return {id:e.id,n:e.n,s:e.s,r:e.r,w:e.w,hit:1};
+  });
+}
+function initLogForm(){
+  logForm={date:yesterdayYmd(),k:next(),lifts:[]};
+  fillLogLifts();
+}
+function openLog(){initLogForm();go("log")}
+function setLogDay(k){logForm.k=k;fillLogLifts();draw()}
+function setLogW(i,v){v=+v;if(!isFinite(v)||!logForm.lifts[i])return;logForm.lifts[i].w=v}
+function nudgeLog(i,d){
+  var L=logForm.lifts[i]; if(!L)return;
+  L.w=Math.max(0,Math.round((+L.w+d)*2)/2); draw();
+}
+function setLogHit(i,hit){if(!logForm.lifts[i])return;logForm.lifts[i].hit=hit?1:0;draw()}
+function logView(){
+  var html=header("Log past workout",1)+
+    '<div class="card"><div class="label">Date</div>'+
+    '<input type="date" value="'+esc(logForm.date)+'" onchange="logForm.date=this.value">'+
+    '<div class="label" style="margin-top:12px">Which day</div>';
+  dayKeys().forEach(function(dk){
+    html+='<button class="btn'+(dk===logForm.k?'':' btn2')+'" onclick="setLogDay(\''+dk+'\')">'+esc(S[dk].name)+'</button>';
+  });
+  html+='</div>';
+  logForm.lifts.forEach(function(L,i){
+    html+='<div class="card"><div class="label">'+esc(L.n)+' · '+scheme(L)+'</div>'+
+      '<div class="row">'+
+      '<button class="icon" onclick="nudgeLog('+i+',-step())">−'+step()+'</button>'+
+      '<input type="number" inputmode="decimal" step="0.5" value="'+L.w+'" onchange="setLogW('+i+',this.value)">'+
+      '<div class="unit">'+u()+'</div>'+
+      '<button class="icon" onclick="nudgeLog('+i+',step())">+'+step()+'</button></div>'+
+      '<div class="set '+(L.hit?'hit':'miss')+'"><div class="tag">'+(L.hit?'HIT':'MISS')+'</div><div></div>'+
+      '<button class="icon go" onclick="setLogHit('+i+',1)">✓</button>'+
+      '<button class="icon no" onclick="setLogHit('+i+',0)">✕</button></div></div>';
+  });
+  html+='<button class="btn" onclick="saveLog()">Save</button>'+
+    '<button class="btn btn2" onclick="go(\'hist\')">Cancel</button>';
+  return html;
+}
+function saveLog(){
+  if(!logForm||dayKeys().indexOf(logForm.k)<0){toast("Pick a day");return}
+  if(!logForm.lifts.length){toast("No lifts");return}
+  var at=atLocalNoon(logForm.date);
+  if(!isFinite(at)){toast("Pick a date");return}
+  var newest=!S.hist.some(function(h){return (+h.at||0)>at});
+  S.hist.push({
+    k:logForm.k,
+    at:at,
+    lifts:logForm.lifts.map(function(L){
+      var sets=[],i,hit=L.hit?1:0;
+      for(i=0;i<L.s;i++) sets.push({r:L.r,ok:hit?1:2});
+      return {id:L.id,n:L.n,w:+L.w||0,s:L.s,r:L.r,sets:sets,hit:!!hit};
+    })
+  });
+  S.hist.sort(function(a,b){return (+b.at||0)-(+a.at||0)});
+  S.hist=S.hist.slice(0,40);
+  if(newest){
+    S.last=logForm.k;
+    logForm.lifts.forEach(function(L){
+      if(!L.id) return;
+      var w=+L.w||0;
+      bump(L.id,function(x){x.w=w});
+    });
+  }
+  save();
+  toast("Logged");
+  go("hist");
 }
 function liftKey(L){
   var raw=(L.id||"").toLowerCase();
@@ -938,7 +1023,7 @@ function restoreOpen(){
 function navState(){return {view:view,qs:quiz.step,pf:pickFrom}}
 function isRootView(){return view==="home"||(view==="quiz"&&quiz.step===1)}
 function isSpoke(v){
-  return v==="prog"||v==="hist"||v==="done"||v==="sess"||v==="editA"||v==="editB"||v==="editC"||(v==="pick"&&pickFrom==="change");
+  return v==="prog"||v==="hist"||v==="log"||v==="done"||v==="sess"||v==="editA"||v==="editB"||v==="editC"||(v==="pick"&&pickFrom==="change");
 }
 function logoTap(){
   if(view==="home") return;
@@ -1008,6 +1093,7 @@ function draw(){
     else if(view==="editB")a.innerHTML=editView("B");
     else if(view==="editC")a.innerHTML=editView("C");
     else if(view==="hist")a.innerHTML=histView();
+    else if(view==="log"){if(!logForm)initLogForm();a.innerHTML=logView()}
     else if(view==="prog")a.innerHTML=progView();
   }catch(err){a.innerHTML='<div class="card">Error: '+esc(err.message)+'</div>'}
 }
