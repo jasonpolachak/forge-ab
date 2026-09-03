@@ -73,6 +73,9 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 .why{color:var(--muted);font-size:13px;line-height:1.45;margin:8px 0 0}
 .quiet{display:block;width:auto;padding:8px 0 0;border:0;background:transparent;color:var(--muted);font-weight:700;font-size:13px}
 .park .name{font-size:18px}
+.fold>summary{list-style:none;cursor:pointer;min-height:52px;display:flex;align-items:center;color:var(--muted);font-weight:700;font-size:13px;margin:0}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary::marker{content:""}
 </style>
 </head>
 <body>
@@ -360,34 +363,34 @@ function home(){
   var k=next(),w=S[k],h=S.hist[0]||null,html=header("Forge")+
     '<div class="card"><div class="label">Program</div><div class="name" style="font-size:22px">'+esc(programName())+'</div>'+
     '<button class="quiet" onclick="goPick()">Change program</button></div>'+
-    '<div class="card"><div class="label">Up next</div><div class="name">'+esc(w.name)+'</div>';
+    '<div class="card"><div class="label">Up next</div><div class="name">'+esc(w.name)+'</div>'+
+    '<p class="muted">Rest '+(S.rest||90)+'s</p>';
   w.ex.forEach(function(e,i){html+=liftBlock(k,e,i)});
   dayKeys().forEach(function(dk){
     html+='<button class="btn'+(dk===k?'':' btn2')+'" onclick="start(\''+dk+'\')">Start '+esc(S[dk].name)+'</button>';
-  });
-  dayKeys().forEach(function(dk){
-    html+='<button class="btn btn2" onclick="go(\'edit'+dk+'\')">Edit '+esc(S[dk].name)+'</button>';
   });
   html+='</div>';
   html+='<div class="card">'+
     '<button class="btn btn2" onclick="go(\'hist\')">Workout history</button>'+
     '<button class="btn'+(S.hist.length?' btn2':'')+'" onclick="openLog()">Log past workout</button>'+
     '<button class="btn btn2" onclick="go(\'prog\')">Progress</button></div>';
-  html+='<div class="card"><button class="btn btn2" onclick="homeSet=homeSet?0:1;draw()">Settings</button>';
-  if(homeSet){
-    html+='<p class="muted" style="margin-top:10px">'+(h?("Last: "+((S[h.k]&&S[h.k].name)||h.k)+" · "+new Date(h.at).toLocaleString()):"No sessions yet")+(S.hist.length?(" · "+S.hist.length+" saved"):"")+'</p>'+
-      '<button class="btn btn2" onclick="expData()">Export</button>'+
-      '<p class="muted" style="margin-top:10px">Saves stay on this phone. Export if you want a copy.</p>'+
-      '<button class="btn btn2" onclick="impData()">Import</button>'+
-      '<p class="muted" style="margin-top:10px">Import if you used another link.</p>'+
-      '<div class="label" style="margin-top:10px">Rest between sets (seconds)</div>'+
-      '<input type="number" value="'+S.rest+'" min="30" step="15" onchange="S.rest=+this.value||90;save()">'+
-      '<button class="btn btn2" onclick="toggleU()">Units: '+u()+'</button>'+
-      '<button class="btn btn2" onclick="toggleTheme()">Theme: '+(theme()==="gym"?"Gym":"Outrun")+'</button>'+
-      '<button class="btn btn2" onclick="S.sound=S.sound?0:1;save();draw()">'+(S.sound?'Rest alert: beep + vibrate':'Rest alert: vibrate only')+'</button>'+
-      '<button class="btn btn2" onclick="resetApp()">Reset app</button>';
-  }
-  html+='</div>';
+  html+='<details class="card fold"'+(homeSet?' open':'')+'>'+
+    '<summary onclick="event.preventDefault();homeSet=homeSet?0:1;draw()">Settings</summary>'+
+    '<div class="label" style="margin-top:4px">Edit</div>';
+  dayKeys().forEach(function(dk){
+    html+='<button class="btn btn2" onclick="go(\'edit'+dk+'\')">'+esc(S[dk].name)+'</button>';
+  });
+  html+='<p class="muted" style="margin-top:10px">'+(h?("Last: "+((S[h.k]&&S[h.k].name)||h.k)+" · "+new Date(h.at).toLocaleString()):"No sessions yet")+(S.hist.length?(" · "+S.hist.length+" saved"):"")+'</p>'+
+    '<button class="btn btn2" onclick="expData()">Export</button>'+
+    '<p class="muted" style="margin-top:10px">Saves stay on this phone. Export if you want a copy.</p>'+
+    '<button class="btn btn2" onclick="impData()">Import</button>'+
+    '<p class="muted" style="margin-top:10px">Import if you used another link.</p>'+
+    '<div class="label" style="margin-top:10px">Rest between sets (seconds)</div>'+
+    '<input type="number" value="'+S.rest+'" min="30" step="15" onchange="S.rest=+this.value||90;save();draw()">'+
+    '<button class="btn btn2" onclick="toggleU()">Units: '+u()+'</button>'+
+    '<button class="btn btn2" onclick="toggleTheme()">Theme: '+(theme()==="gym"?"Gym":"Outrun")+'</button>'+
+    '<button class="btn btn2" onclick="S.sound=S.sound?0:1;save();draw()">'+(S.sound?'Rest alert: beep + vibrate':'Rest alert: vibrate only')+'</button>'+
+    '<button class="btn btn2" onclick="resetApp()">Reset app</button></details>';
   return html;
 }
 function quizView(){
