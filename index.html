@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.5</title>
+<title>Forge 0.6.6</title>
 <style>
 :root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
@@ -24,6 +24,7 @@ body{margin:0;background:var(--field);color:var(--text);font-family:-apple-syste
 .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:8px}
 .brand{display:flex;gap:10px;align-items:center}
 .logo{width:36px;height:36px;border-radius:10px;background:var(--primary);color:var(--ink);font-weight:800;display:grid;place-items:center}
+.logo[onclick]{cursor:pointer}
 h1,p{margin:0}
 small{display:block;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
 .ver{font-size:11px;font-weight:800;background:var(--primary);color:var(--ink);border-radius:99px;padding:4px 8px}
@@ -78,7 +79,7 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.5",K="forge-ab-v1";
+var V="0.6.6",K="forge-ab-v1";
 var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear"];
 var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],programId:null,goal:null,daysWk:null,gear:null,
 A:{name:"Workout A",ex:[
@@ -287,10 +288,10 @@ function chooseProgram(id){
     if(!confirm("Switch to "+PROGRAMS[id].name+"? History stays on this phone. Lifts become the new template. Current working weights for this program are replaced.")) return;
   }
   applyProgram(id);
-  view="home"; draw();
+  go("home");
   toast(PROGRAMS[id].name);
 }
-function goPick(){pickFrom="change";view="pick";draw()}
+function goPick(){pickFrom="change";go("pick")}
 function scheme(e){
   if(e.lastAmrap&&e.s>1) return (e.s-1)+"×"+e.r+" + AMRAP";
   if(e.lastAmrap&&e.s===1) return "1×AMRAP ("+e.r+"+)";
@@ -305,7 +306,8 @@ function seedNote(e){
   return "";
 }
 function header(title,back,sub){
-  return '<div class="top"><div class="brand">'+(back?'<button class="icon" onclick="go(\'home\')">←</button>':'<div class="logo">F</div>')+
+  var mark=back?'<button class="icon" onclick="go(\'home\')">←</button>':(view==="home"?'<div class="logo">F</div>':'<div class="logo" onclick="logoTap()">F</div>');
+  return '<div class="top"><div class="brand">'+mark+
     '<div><h1>'+esc(title)+'</h1><small>'+esc(sub||programName())+'</small></div></div><span class="ver">v'+V+'</span></div>';
 }
 function liftBlock(k,e,i){
@@ -366,26 +368,25 @@ function quizView(){
       '<button class="btn" onclick="ans(\'daysWk\',\'23\')">2–3</button>'+
       '<button class="btn btn2" onclick="ans(\'daysWk\',\'4\')">4</button>'+
       '<button class="btn btn2" onclick="ans(\'daysWk\',\'56\')">5–6</button>'+
-      '<button class="btn btn2" onclick="quiz.step=1;draw()">Back</button>';
+      '<button class="btn btn2" onclick="history.back()">Back</button>';
   } else {
     html+='<div class="label">Question 3 of 3</div><div class="name">Equipment</div>'+
       '<button class="btn" onclick="ans(\'gear\',\'bb\')">Barbell + rack</button>'+
       '<button class="btn btn2" onclick="ans(\'gear\',\'db\')">Dumbbells</button>'+
       '<button class="btn btn2" onclick="ans(\'gear\',\'bw\')">Bodyweight only</button>'+
-      '<button class="btn btn2" onclick="quiz.step=2;draw()">Back</button>';
+      '<button class="btn btn2" onclick="history.back()">Back</button>';
   }
   html+='</div>';
   return html;
 }
 function ans(k,v){
   quiz[k]=v;
-  if(k==="goal") quiz.step=2;
-  else if(k==="daysWk") quiz.step=3;
+  if(k==="goal"){ quiz.step=2; go("quiz"); }
+  else if(k==="daysWk"){ quiz.step=3; go("quiz"); }
   else {
     S.goal=quiz.goal; S.daysWk=quiz.daysWk; S.gear=quiz.gear;
-    pickFrom="onboard"; view="pick";
+    pickFrom="onboard"; go("pick");
   }
-  draw();
 }
 function recWhy(){
   var g=S.goal||quiz.goal,d=S.daysWk||quiz.daysWk,eq=S.gear||quiz.gear;
@@ -406,7 +407,8 @@ function pickCard(id,big){
 function pickView(){
   var rec=recommend(S.goal||quiz.goal,S.daysWk||quiz.daysWk,S.gear||quiz.gear);
   var ids=pickFrom==="change"?ALL_IDS.slice():eightIds();
-  var html='<div class="top"><div class="brand">'+(pickFrom==="change"?'<button class="icon" onclick="go(\'home\')">←</button>':'<div class="logo">F</div>')+
+  var mark=pickFrom==="change"?'<button class="icon" onclick="go(\'home\')">←</button>':'<div class="logo" onclick="logoTap()">F</div>';
+  var html='<div class="top"><div class="brand">'+mark+
     '<div><h1>Program</h1><small>'+(pickFrom==="change"?"Change program":"Pick a plan")+'</small></div></div><span class="ver">v'+V+'</span></div>';
   if(pickFrom==="onboard"){
     html+=pickCard(rec,1);
@@ -440,7 +442,7 @@ function start(k){
   var w=S[k];
   sess={k:k,i:0,ex:w.ex.filter(function(e){return !e.optional||(e.n&&String(e.n).trim())}).map(copyLift)};
   if(!sess.ex.length){toast("No lifts");return}
-  left=0; restEnds=0; lastMarked=0; view="sess"; persistSess(); keepAwake(); draw();
+  left=0; restEnds=0; lastMarked=0; persistSess(); keepAwake(); go("sess");
 }
 function doneCount(e){return e.log.filter(function(s){return s.ok}).length}
 function wLabel(e){
@@ -450,8 +452,8 @@ function wLabel(e){
 }
 function sessView(){
   var e=sess.ex[sess.i], dc=doneCount(e);
-  var html='<div class="top"><button class="icon" onclick="quitSess()">✕</button>'+
-    '<div><div class="label" style="margin:0">'+esc(S[sess.k].name)+'</div><p class="muted">'+(sess.i+1)+' of '+sess.ex.length+' lifts</p></div>'+
+  var html='<div class="top"><div class="brand"><button class="icon" onclick="go(\'home\')">←</button>'+
+    '<div><div class="label" style="margin:0">'+esc(S[sess.k].name)+'</div><p class="muted">'+(sess.i+1)+' of '+sess.ex.length+' lifts</p></div></div>'+
     '<span class="ver">v'+V+'</span></div>';
   html+='<div class="card"><div class="label">Now lifting</div><div class="name">'+esc(e.n)+'</div>'+
     '<p class="muted">'+scheme(e)+(e.prog==="log"?" · log only":"")+'</p>'+
@@ -471,6 +473,7 @@ function sessView(){
   });
   if(dc===e.s) html+='<button class="btn" onclick="nxt()">'+(sess.i<sess.ex.length-1?'Next lift':'Finish workout')+'</button>';
   html+='<button class="btn btn2" onclick="nxt()">Skip lift</button>';
+  html+='<button class="btn btn2" onclick="quitSess()">Quit workout</button>';
   if(left>0){
     html+='<div class="restbar go"><div class="label">Rest</div><div class="clock" id="clock">'+fmt(left)+'</div>'+
       '<p class="muted">'+(dc===0?'Next lift. Rest, then start set 1.':'Set '+(lastMarked+1)+' logged. Then do set '+(lastMarked+2<=e.s?lastMarked+2:e.s)+'.')+'</p>'+
@@ -661,7 +664,7 @@ function nxt(){
     })
   });
   S.hist=S.hist.slice(0,40);
-  S.sess=null; save(); sess=null; dropWake(); view="done"; draw();
+  S.sess=null; save(); sess=null; dropWake(); go("done");
 }
 function doneView(){
   var html=header("Saved",1)+'<div class="card">';
@@ -862,7 +865,7 @@ function progView(){
   return html;
 }
 function quitSess(){
-  if(!confirm("Quit session?"))return;
+  if(!confirm("Quit workout?"))return;
   dropWake();
   if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;
   sess=null;S.sess=null;save();go("home");
@@ -873,7 +876,7 @@ function resetApp(){
   if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;
   sess=null;lastRes=[];
   try{localStorage.removeItem(K)}catch(e){}
-  S=clone(D); quiz={step:1,goal:null,daysWk:null,gear:null}; pickFrom="onboard"; view="quiz"; draw();
+  S=clone(D); quiz={step:1,goal:null,daysWk:null,gear:null}; pickFrom="onboard"; go("quiz");
 }
 function expData(){
   try{
@@ -899,7 +902,7 @@ function impData(){
         dropWake();
         if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;sess=null;
         S=mergeSave(p); save();
-        if(skipQuiz(p)) go("home"); else {quiz={step:1,goal:null,daysWk:null,gear:null};view="quiz";draw()}
+        if(skipQuiz(p)) go("home"); else {quiz={step:1,goal:null,daysWk:null,gear:null};go("quiz")}
         toast("Imported");
       }catch(e){toast("Import failed")}
     };
@@ -926,7 +929,66 @@ function restoreOpen(){
   view="sess";
   keepAwake();
 }
-function go(v){view=v;draw()}
+function navState(){return {view:view,qs:quiz.step,pf:pickFrom}}
+function isRootView(){return view==="home"||(view==="quiz"&&quiz.step===1)}
+function isSpoke(v){
+  return v==="prog"||v==="hist"||v==="done"||v==="sess"||v==="editA"||v==="editB"||v==="editC"||(v==="pick"&&pickFrom==="change");
+}
+function logoTap(){
+  if(view==="home") return;
+  if((view==="quiz"&&quiz.step>1)||(view==="pick"&&pickFrom==="onboard")){
+    history.back();
+    return;
+  }
+  go("home");
+}
+function go(v,fromPop){
+  if(view==="sess" && v!=="sess"){
+    persistSess();
+    dropWake();
+  }
+  var prev=view;
+  view=v;
+  if(!fromPop){
+    try{
+      if(isSpoke(v)&&isSpoke(prev)) history.replaceState(navState(),"",location.href);
+      else history.pushState(navState(),"",location.href);
+    }catch(e){}
+  }
+  draw();
+}
+function bootHist(){
+  try{
+    if(view==="sess"){
+      history.replaceState({view:"home",qs:quiz.step,pf:pickFrom},"",location.href);
+      history.pushState(navState(),"",location.href);
+    }else{
+      history.replaceState(navState(),"",location.href);
+      if(isRootView()) history.pushState(navState(),"",location.href);
+    }
+  }catch(e){}
+}
+window.addEventListener("popstate",function(e){
+  if(isRootView()){
+    try{ history.pushState(navState(),"",location.href); }catch(err){}
+    return;
+  }
+  var st=e.state;
+  if(!st||!st.view){
+    try{ history.pushState(navState(),"",location.href); }catch(err){}
+    return;
+  }
+  if(st.view==="sess"&&!sess){
+    restoreOpen();
+    if(!sess){ go("home",true); return; }
+  }
+  if(st.qs!=null) quiz.step=st.qs;
+  if(st.pf) pickFrom=st.pf;
+  go(st.view,true);
+  if(isRootView()){
+    try{ history.pushState(navState(),"",location.href); }catch(err){}
+  }
+});
 function draw(){
   applyTheme();
   var a=document.getElementById("app");
@@ -944,6 +1006,7 @@ function draw(){
   }catch(err){a.innerHTML='<div class="card">Error: '+esc(err.message)+'</div>'}
 }
 restoreOpen();
+bootHist();
 draw();
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(function(){});
 </script>
