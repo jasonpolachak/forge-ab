@@ -8,11 +8,15 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.3</title>
+<title>Forge 0.6.4</title>
 <style>
-:root{
+:root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
-  --well:#120c28;--icon:#2a2150;--primary:#ff2e9a;--ink:#1a0412;--cyan:#2de8ff;--ready:#2a0d22;
+  --well:#120c28;--icon:#2a2150;--primary:#ff2e9a;--ink:#1a0412;--cyan:#2de8ff;--ready:#2a0d22;--status:#16102c;
+}
+html[data-theme="gym"]{
+  --field:#101214;--card:#222830;--text:#f6f3ec;--muted:#b0b8c2;--border:#3a4350;
+  --well:#181c21;--icon:#2a333d;--primary:#f0b429;--ink:#14110a;--cyan:#b0b8c2;--ready:#2a2410;--status:#1c2430;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--field);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:calc(16px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom))}
@@ -40,10 +44,10 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 .set.hit .icon.go{background:#3dba7a;color:#062214}
 .set.miss .icon.no{background:#e15b4a;color:#2a0c0a}
 .muted{color:var(--muted);font-size:13px}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2a3038;padding:10px 14px;border-radius:99px;font-size:13px;font-weight:700;opacity:0;z-index:30}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--card);padding:10px 14px;border-radius:99px;font-size:13px;font-weight:700;opacity:0;z-index:30}
 .toast.show{opacity:1}
 .unit{flex:0 0 48px;text-align:center;font-weight:800}
-.status{background:#1c2430;border-radius:12px;padding:12px;margin-bottom:12px}
+.status{background:var(--status);border-radius:12px;padding:12px;margin-bottom:12px}
 .clock{font-size:42px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
 .restbar{position:sticky;bottom:0;margin:16px -16px 0;padding:14px 16px calc(14px + env(safe-area-inset-bottom));background:#0e2a1c;border-top:2px solid #3dba7a;z-index:20}
 .restbar.go{background:#0e2a1c}
@@ -52,7 +56,17 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 .stat{background:var(--well);border-radius:12px;padding:10px}
 .stat .n{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
 .spark{display:flex;align-items:flex-end;gap:3px;height:44px;margin-top:10px}
+.spark.big{height:96px}
 .spark i{flex:1;background:var(--primary);border-radius:2px 2px 0 0;display:block;min-width:3px;min-height:3px}
+.seg{display:flex;gap:6px;margin-top:8px}
+.seg button{flex:1;padding:10px 4px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text);font-weight:800;font-size:12px}
+.seg button.on{background:var(--primary);color:var(--ink);border-color:var(--primary)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:10px}
+.cal i{display:block;aspect-ratio:1;border-radius:50%;background:var(--well);border:1px solid var(--border)}
+.cal i.on{background:var(--primary);border-color:var(--primary)}
+.cal i.fut{opacity:.25}
+.wd{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:8px}
+.wd span{text-align:center;font-size:10px;font-weight:800;letter-spacing:.04em;color:var(--muted);text-transform:uppercase}
 .wbig{font-size:48px;font-weight:800;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1}
 .wrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0}
 </style>
@@ -61,8 +75,8 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.3",K="forge-ab-v1";
-var D={units:"lb",rest:90,sound:0,last:null,fail:{},hist:[],
+var V="0.6.4",K="forge-ab-v1";
+var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],
 A:{name:"Workout A",ex:[
 {id:"squat",n:"Squat",s:5,r:5,inc:5,w:45},
 {id:"bench",n:"Bench Press",s:5,r:5,inc:5,w:45},
@@ -74,7 +88,7 @@ B:{name:"Workout B",ex:[
 function clone(o){return JSON.parse(JSON.stringify(o))}
 function load(){
   try{var p=JSON.parse(localStorage.getItem(K)||"null");if(!p)return clone(D);
-    var o=clone(D);["units","rest","sound","last","fail","hist","A","B","sess"].forEach(function(k){if(p[k]!=null)o[k]=p[k]});return o;
+    var o=clone(D);["units","rest","sound","last","theme","graph","fail","hist","A","B","sess"].forEach(function(k){if(p[k]!=null)o[k]=p[k]});return o;
   }catch(e){return clone(D)}
 }
 var S=load(),view="home",sess=null,timer=null,left=0,restEnds=0,lastRes=[],lastMarked=0,restTold=0,wakeLock=null;
@@ -100,6 +114,15 @@ function dropWake(){
 }
 function toast(m){var t=document.getElementById("toast");t.textContent=m;t.className="toast show";setTimeout(function(){t.className="toast"},1600)}
 function next(){return S.last==="A"?"B":"A"}
+function theme(){return S.theme==="gym"?"gym":"outrun"}
+function graph(){return S.graph==="e1rm"||S.graph==="vol"||S.graph==="reps"?S.graph:"w"}
+function applyTheme(){
+  var t=theme(), color=t==="gym"?"#101214":"#0c0620";
+  document.documentElement.setAttribute("data-theme",t);
+  var m=document.querySelector('meta[name="theme-color"]');
+  if(m) m.setAttribute("content",color);
+}
+function toggleTheme(){S.theme=theme()==="outrun"?"gym":"outrun";save();applyTheme();draw()}
 function u(){return S.units==="kg"?"kg":"lb"}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return ({"&":"&","<":"<",">":">",'"':'"'})[c]})}
 function bump(id,fn){["A","B"].forEach(function(k){S[k].ex.forEach(function(e){if(e.id===id)fn(e)})})}
@@ -108,7 +131,7 @@ function header(title,back){
     '<div><h1>'+title+'</h1><small>Two workouts. Add weight.</small></div></div><span class="ver">v'+V+'</span></div>';
 }
 function home(){
-  var k=next(),w=S[k],o=k==="A"?"B":"A",h=S.hist[0]||null,html=header("Forge")+
+  var k=next(),w=S[k],h=S.hist[0]||null,html=header("Forge")+
     '<div class="card"><div class="label">Up next</div><div class="name">'+esc(w.name)+'</div>';
   w.ex.forEach(function(e,i){
     html+='<div class="label" style="margin-top:10px">'+esc(e.n)+' · '+e.s+'×'+e.r+'</div><div class="row">'+
@@ -117,21 +140,23 @@ function home(){
       '<div class="unit">'+u()+'</div>'+
       '<button class="icon" onclick="nudge(\''+k+'\','+i+',step())">+'+step()+'</button></div>';
   });
-  html+='<button class="btn" onclick="start(\''+k+'\')">Start '+esc(w.name)+'</button>'+
-    '<button class="btn btn2" onclick="start(\''+o+'\')">Do '+esc(S[o].name)+' instead</button>'+
+  html+='<button class="btn'+(k==="A"?'':' btn2')+'" onclick="start(\'A\')">Start '+esc(S.A.name)+'</button>'+
+    '<button class="btn'+(k==="B"?'':' btn2')+'" onclick="start(\'B\')">Start '+esc(S.B.name)+'</button>'+
     '<button class="btn btn2" onclick="go(\'editA\')">Edit Workout A</button>'+
     '<button class="btn btn2" onclick="go(\'editB\')">Edit Workout B</button></div>';
   html+='<div class="card"><div class="label">Sessions</div><p class="name">'+(S.hist.length)+'</p>'+
     '<p class="muted">'+(h?("Last: "+((S[h.k]&&S[h.k].name)||h.k)+" · "+new Date(h.at).toLocaleString()):"No sessions yet")+'</p>'+
     '<button class="btn btn2" onclick="go(\'prog\')">Progress</button>'+
     '<button class="btn btn2" onclick="go(\'hist\')">Workout history</button>'+
+    '<button class="btn btn2" onclick="expData()">Export</button>'+
+    '<p class="muted" style="margin-top:10px">Saves stay on this phone. Export if you want a copy.</p>'+
+    '<button class="btn btn2" onclick="impData()">Import</button>'+
+    '<p class="muted" style="margin-top:10px">Import if you used another link.</p>'+
     '<div class="label" style="margin-top:10px">Rest between sets (seconds)</div>'+
     '<input type="number" value="'+S.rest+'" min="30" step="15" onchange="S.rest=+this.value||90;save()">'+
     '<button class="btn btn2" onclick="toggleU()">Units: '+u()+'</button>'+
+    '<button class="btn btn2" onclick="toggleTheme()">Theme: '+(theme()==="gym"?"Gym":"Outrun")+'</button>'+
     '<button class="btn btn2" onclick="S.sound=S.sound?0:1;save();draw()">'+(S.sound?'Rest alert: beep + vibrate':'Rest alert: vibrate only')+'</button>'+
-    '<button class="btn btn2" onclick="expData()">Export</button>'+
-    '<button class="btn btn2" onclick="impData()">Import</button>'+
-    '<p class="muted" style="margin-top:10px">Import if you used another link.</p>'+
     '<button class="btn btn2" onclick="resetApp()">Reset app</button></div>';
   return html;
 }
@@ -350,11 +375,63 @@ function volOf(L){
   if(L.sets&&L.sets.length) return L.sets.reduce(function(t,s){return t+(+L.w||0)*(+s.r||0)},0);
   return (+L.w||0)*(+L.s||0)*(+L.r||0);
 }
+function repsOf(L){
+  if(!L) return 0;
+  if(L.sets&&L.sets.length) return L.sets.reduce(function(t,s){return t+(+s.r||0)},0);
+  return (+L.s||0)*(+L.r||0);
+}
+function liftE1rm(L){
+  if(!L) return null;
+  var w=+L.w||0, best=null;
+  if(L.sets&&L.sets.length){
+    L.sets.forEach(function(s){
+      var r=+s.r||0;
+      if(r<1||r>12) return;
+      var v=e1rm(w,r);
+      if(best==null||v>best) best=v;
+    });
+    return best;
+  }
+  var r=+L.r||0;
+  return (r>=1&&r<=12)?e1rm(w,r):null;
+}
 function inDays(at,n){return (Date.now()-at)<n*86400000}
-function spark(vals){
+function spark(vals,big){
   if(!vals.length) return '<p class="muted">No logged sets yet. Finish workouts to fill the chart.</p>';
-  var mx=Math.max.apply(null,vals.concat([1]));
-  return '<div class="spark">'+vals.map(function(v){return '<i style="height:'+Math.max(4,Math.round(40*v/mx))+'px"></i>'}).join("")+'</div>';
+  var mx=Math.max.apply(null,vals.concat([1])), h=big?88:40;
+  return '<div class="spark'+(big?' big':'')+'">'+vals.map(function(v){return '<i style="height:'+Math.max(4,Math.round(h*v/mx))+'px"></i>'}).join("")+'</div>';
+}
+function setGraph(m){S.graph=m;save();draw()}
+function programLifts(){
+  var seen={}, list=[];
+  ["A","B"].forEach(function(k){
+    S[k].ex.forEach(function(e){
+      if(seen[e.id]) return;
+      seen[e.id]=1;
+      list.push({id:e.id,n:e.n,w:e.w});
+    });
+  });
+  return list;
+}
+function weekDots(){
+  var hit={};
+  S.hist.forEach(function(h){
+    var d=new Date(h.at);
+    hit[d.getFullYear()+"-"+d.getMonth()+"-"+d.getDate()]=1;
+  });
+  var start=new Date();
+  start.setHours(0,0,0,0);
+  start.setDate(start.getDate()-55);
+  start.setDate(start.getDate()-start.getDay());
+  var today=new Date(); today.setHours(0,0,0,0);
+  var html='<div class="wd"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div><div class="cal">';
+  for(var i=0;i<63;i++){
+    var d=new Date(start.getTime()+i*86400000);
+    if(d>today && d.getDay()===0 && i>0) break;
+    var key=d.getFullYear()+"-"+d.getMonth()+"-"+d.getDate();
+    html+='<i class="'+(hit[key]?"on":"")+(d>today?" fut":"")+'"></i>';
+  }
+  return html+'</div>';
 }
 function currentW(id){
   var w=0;
@@ -370,51 +447,59 @@ function progView(){
   S.hist.slice().reverse().forEach(function(h){
     if(!h.lifts) return;
     h.lifts.forEach(function(L){
-      var k=liftKey(L); if(!k) return;
-      if(!by[k]) by[k]={n:L.n,id:L.id,pts:[],pr:0,last:null,vol:[]};
+      var k=L.id||liftKey(L); if(!k) return;
+      if(!by[k]) by[k]={n:L.n,id:L.id,w:[],e1:[],vol:[],reps:[],pr:0,last:null};
       by[k].n=L.n;
-      by[k].pts.push(+L.w||0);
+      by[k].w.push(+L.w||0);
+      var est=liftE1rm(L);
+      if(est!=null) by[k].e1.push(est);
       by[k].vol.push(volOf(L));
+      by[k].reps.push(repsOf(L));
       if((+L.w||0)>by[k].pr) by[k].pr=+L.w;
       by[k].last=L;
     });
   });
+  var gmode=graph();
+  var labels={w:"Weight",e1rm:"e1RM",vol:"Volume",reps:"Reps"};
   var html=header("Progress",1)+
     '<div class="card"><div class="label">Consistency</div><div class="stats">'+
     '<div class="stat"><div class="label">Week</div><div class="n">'+week+'</div></div>'+
     '<div class="stat"><div class="label">30 days</div><div class="n">'+month+'</div></div>'+
     '<div class="stat"><div class="label">All</div><div class="n">'+S.hist.length+'</div></div></div>'+
-    '<p class="muted" style="margin-top:8px">StrongLifts-style 5×5 works best at about 3 sessions a week.</p></div>'+
+    weekDots()+
+    '<p class="muted" style="margin-top:8px">Filled circle = a finished session. StrongLifts-style 5×5 works best at about 3 sessions a week.</p></div>'+
     '<div class="card"><div class="label">Powerlifting total</div><div class="name">'+total+' '+u()+'</div>'+
-    '<p class="muted">Squat '+sq+' + bench '+bp+' + deadlift '+dl+' (current working weights)</p></div>';
-  var ids=["squat","bench","ohp","row","dl"];
-  var names={squat:"Squat",bench:"Bench Press",ohp:"Overhead Press",row:"Barbell Row",dl:"Deadlift"};
-  ids.forEach(function(id){
-    var cur=currentW(id), g=by[id]||{n:names[id],pts:[],pr:cur,last:null,vol:[]};
+    '<p class="muted">Squat '+sq+' + bench '+bp+' + deadlift '+dl+' (current working weights)</p></div>'+
+    '<div class="card"><div class="label">Charts</div>'+
+    '<div class="seg">'+
+    '<button class="'+(gmode==="w"?"on":"")+'" onclick="setGraph(\'w\')">Weight</button>'+
+    '<button class="'+(gmode==="e1rm"?"on":"")+'" onclick="setGraph(\'e1rm\')">e1RM</button>'+
+    '<button class="'+(gmode==="vol"?"on":"")+'" onclick="setGraph(\'vol\')">Volume</button>'+
+    '<button class="'+(gmode==="reps"?"on":"")+'" onclick="setGraph(\'reps\')">Reps</button></div>'+
+    '<p class="muted" style="margin-top:8px">e1RM uses Epley and only counts sets of 12 reps or fewer.</p></div>';
+  programLifts().forEach(function(lift){
+    var cur=lift.w, g=by[lift.id]||{n:lift.n,w:[],e1:[],vol:[],reps:[],pr:cur,last:null};
     if(!g.pr) g.pr=cur;
     var last=g.last;
-    var reps=last&&last.sets&&last.sets.length?Math.max.apply(null,last.sets.map(function(s){return +s.r||0})):5;
-    var est=e1rm(cur|| (last&&last.w) ||0, reps);
+    var est=liftE1rm(last);
+    if(est==null && last && (+last.r||0)>12) est=null;
+    else if(est==null && cur){
+      var pr=5;
+      ["A","B"].forEach(function(k){S[k].ex.forEach(function(e){if(e.id===lift.id)pr=e.r})});
+      est=pr<=12?e1rm(cur,pr):null;
+    }
     var lastVol=g.vol.length?g.vol[g.vol.length-1]:0;
-    html+='<div class="card"><div class="label">'+esc(g.n||names[id])+'</div>'+
+    var series=gmode==="e1rm"?g.e1:gmode==="vol"?g.vol:gmode==="reps"?g.reps:g.w;
+    html+='<div class="card"><div class="label">'+esc(g.n||lift.n)+'</div>'+
       '<div class="stats">'+
       '<div class="stat"><div class="label">Now</div><div class="n">'+(cur||"—")+'</div></div>'+
       '<div class="stat"><div class="label">Best</div><div class="n">'+(g.pr||"—")+'</div></div>'+
-      '<div class="stat"><div class="label">e1RM</div><div class="n">'+est+'</div></div></div>'+
-      '<p class="muted" style="margin-top:8px">Last volume '+(lastVol?lastVol+" "+u():"n/a")+' · weight over time</p>'+
-      spark(g.pts)+
+      '<div class="stat"><div class="label">e1RM</div><div class="n">'+(est!=null?est:"—")+'</div></div></div>'+
+      '<p class="muted" style="margin-top:8px">'+labels[gmode]+' over time'+(lastVol?' · last volume '+lastVol+" "+u():"")+'</p>'+
+      (gmode==="e1rm"&&!series.length?'<p class="muted">e1RM needs sets of 12 reps or fewer.</p>':spark(series,1))+
       '</div>';
   });
-  Object.keys(by).forEach(function(k){
-    if(ids.indexOf(k)>=0) return;
-    var g=by[k], last=g.last, reps=last&&last.sets?Math.max.apply(null,last.sets.map(function(s){return +s.r||0})):5;
-    html+='<div class="card"><div class="label">'+esc(g.n)+'</div>'+
-      '<div class="stats"><div class="stat"><div class="label">Best</div><div class="n">'+g.pr+'</div></div>'+
-      '<div class="stat"><div class="label">e1RM</div><div class="n">'+e1rm(g.pr,reps)+'</div></div>'+
-      '<div class="stat"><div class="label">Logs</div><div class="n">'+g.pts.length+'</div></div></div>'+
-      spark(g.pts)+'</div>';
-  });
-  html+='<p class="muted">e1RM is an estimate from Epley (weight × (1 + reps/30)). Charts use logged sessions only.</p>';
+  html+='<p class="muted">e1RM is an estimate from Epley (weight × (1 + reps/30)). Charts use logged sessions for lifts in the current program.</p>';
   html+='<button class="btn" onclick="go(\'hist\')">Open history</button><button class="btn btn2" onclick="go(\'home\')">Back home</button>';
   return html;
 }
@@ -454,7 +539,7 @@ function impData(){
         dropWake();
         if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;sess=null;
         var o=clone(D);
-        ["units","rest","sound","last","fail","hist","A","B"].forEach(function(k){if(p[k]!=null)o[k]=p[k]});
+        ["units","rest","sound","last","theme","graph","fail","hist","A","B"].forEach(function(k){if(p[k]!=null)o[k]=p[k]});
         S=o;save();go("home");toast("Imported");
       }catch(e){toast("Import failed")}
     };
@@ -483,6 +568,7 @@ function restoreOpen(){
 }
 function go(v){view=v;draw()}
 function draw(){
+  applyTheme();
   var a=document.getElementById("app");
   try{
     if(view==="home")a.innerHTML=home();
