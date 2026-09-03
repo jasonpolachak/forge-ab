@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.9</title>
+<title>Forge 0.6.10</title>
 <style>
 :root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
@@ -79,7 +79,7 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.9",K="forge-ab-v1";
+var V="0.6.10",K="forge-ab-v1";
 var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear"];
 var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],programId:null,goal:null,daysWk:null,gear:null,
 A:{name:"Workout A",ex:[
@@ -102,11 +102,33 @@ function X(id,n,s,r,inc,w,opt){
   return e;
 }
 function custom(day){return X("custom_"+day,"",3,8,0,0,{prog:"log",optional:1})}
+function logx(id,n){return X(id,n,3,8,0,0,{prog:"log"})}
 function bar(id,n,s,r,inc,w){return X(id,n,s,r,inc,w,{seed:"bar",prog:"linear"})}
 function dbx(id,n,s,r,inc,w){return X(id,n,s,r,inc,w==null?10:w,{seed:"db",prog:"linear",floor:10})}
 function bw(id,n){return X(id,n,3,8,5,0,{seed:"bw",prog:"bw",repCap:12,rFloor:5})}
 function pull(id,n,cap){return X(id,n,3,8,5,0,{seed:"bw",prog:"pullup",repCap:cap||12,rFloor:5,floor:0})}
 function day(name,ex){return {name:name,ex:ex}}
+function jasonTemplate(){
+  return {
+    A:day("Workout A",[
+      bar("squat","Squat",5,5,5,45),
+      bar("bench","Bench Press",5,5,5,45),
+      pull("pullup","Pull-up",12),
+      logx("situp","Sit-ups"),
+      logx("curl","Arm curls"),
+      logx("swing","Kettlebell swings"),
+      custom("A")
+    ]),
+    B:day("Workout B",[
+      bar("squat","Squat",5,5,5,45),
+      bar("ohp","Overhead Press",5,5,5,45),
+      bar("dl","Deadlift",1,5,10,95),
+      logx("situp","Sit-ups"),
+      logx("curl","Arm curls"),
+      custom("B")
+    ])
+  };
+}
 var PROGRAMS={
   "stronglifts-5x5":{name:"StrongLifts 5×5",blurb:"A/B. Squat, bench, row / squat, OHP, deadlift 1×5. Linear +5, deadlift +10.",
     make:function(){return {
@@ -202,7 +224,7 @@ function load(){
   return mergeSave(p);
 }
 var S=load(),view="home",sess=null,timer=null,left=0,restEnds=0,lastRes=[],lastMarked=0,restTold=0,wakeLock=null,logForm=null;
-var quiz={step:1,goal:null,daysWk:null,gear:null},pickFrom="onboard";
+var quiz={step:0,goal:null,daysWk:null,gear:null},pickFrom="onboard";
 if(!S.rest) S.rest=90;
 var rawBoot=loadRaw();
 if(!rawBoot) view="quiz";
@@ -272,6 +294,15 @@ function eightIds(){
     g==="db"?"ppl-db":"ppl",
     "db-full-body",
     d==="56"?"bodyweight-3d":"bodyweight"];
+}
+function continueFive(){
+  if(skipQuiz(loadRaw())) return;
+  var t=jasonTemplate();
+  S.programId="stronglifts-5x5";
+  S.A=t.A; S.B=t.B;
+  delete S.C;
+  save();
+  go("home");
 }
 function applyProgram(id){
   var p=PROGRAMS[id]; if(!p) return;
@@ -356,14 +387,18 @@ function home(){
   return html;
 }
 function quizView(){
-  var html=header("Forge",0,"Three questions");
+  var html=header("Forge",0,quiz.step===0?programName():"Three questions");
   html+='<div class="card">';
-  if(quiz.step===1){
+  if(quiz.step===0){
+    html+='<button class="btn" onclick="continueFive()">Continue 5×5</button>'+
+      '<button class="btn btn2" onclick="startQuiz()">I\'m new</button>';
+  } else if(quiz.step===1){
     html+='<div class="label">Question 1 of 3</div><div class="name">Goal</div>'+
       '<p class="why">One tap. You can pick a different program next.</p>'+
       '<button class="btn" onclick="ans(\'goal\',\'strength\')">Get stronger</button>'+
       '<button class="btn btn2" onclick="ans(\'goal\',\'muscle\')">Build muscle</button>'+
-      '<button class="btn btn2" onclick="ans(\'goal\',\'general\')">General fitness</button>';
+      '<button class="btn btn2" onclick="ans(\'goal\',\'general\')">General fitness</button>'+
+      '<button class="btn btn2" onclick="history.back()">Back</button>';
   } else if(quiz.step===2){
     html+='<div class="label">Question 2 of 3</div><div class="name">Days / week</div>'+
       '<button class="btn" onclick="ans(\'daysWk\',\'23\')">2–3</button>'+
@@ -378,8 +413,11 @@ function quizView(){
       '<button class="btn btn2" onclick="history.back()">Back</button>';
   }
   html+='</div>';
-  html+=impCtl();
   return html;
+}
+function startQuiz(){
+  quiz.step=1;
+  go("quiz");
 }
 function ans(k,v){
   quiz[k]=v;
@@ -423,12 +461,7 @@ function pickView(){
     html+='<div class="card park"><div class="label">Coming</div><div class="name">'+esc(p.name)+'</div>'+
       '<p class="why">Coming — needs working-max math we don\'t have yet.</p></div>';
   });
-  html+=impCtl();
   return html;
-}
-function impCtl(){
-  return '<div class="card"><button class="btn btn2" onclick="impData()">Import</button>'+
-    '<p class="muted" style="margin-top:10px">Restores a Forge JSON from this phone (export/email/Files).</p></div>';
 }
 function step(){return S.units==="kg"?2.5:5}
 function setW(k,i,v){
@@ -967,7 +1000,7 @@ function resetApp(){
   if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;
   sess=null;lastRes=[];
   try{localStorage.removeItem(K)}catch(e){}
-  S=clone(D); quiz={step:1,goal:null,daysWk:null,gear:null}; pickFrom="onboard"; go("quiz");
+  S=clone(D); quiz={step:0,goal:null,daysWk:null,gear:null}; pickFrom="onboard"; go("quiz");
 }
 function expData(){
   try{
@@ -993,7 +1026,7 @@ function impData(){
         dropWake();
         if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;sess=null;
         S=mergeSave(p); save();
-        if(skipQuiz(p)) go("home"); else {quiz={step:1,goal:null,daysWk:null,gear:null};go("quiz")}
+        if(skipQuiz(p)) go("home"); else {quiz={step:0,goal:null,daysWk:null,gear:null};go("quiz")}
         toast("Imported");
       }catch(e){toast("Import failed")}
     };
@@ -1021,13 +1054,14 @@ function restoreOpen(){
   keepAwake();
 }
 function navState(){return {view:view,qs:quiz.step,pf:pickFrom}}
-function isRootView(){return view==="home"||(view==="quiz"&&quiz.step===1)}
+function isRootView(){return view==="home"||(view==="quiz"&&quiz.step===0)}
 function isSpoke(v){
   return v==="prog"||v==="hist"||v==="log"||v==="done"||v==="sess"||v==="editA"||v==="editB"||v==="editC"||(v==="pick"&&pickFrom==="change");
 }
 function logoTap(){
   if(view==="home") return;
-  if((view==="quiz"&&quiz.step>1)||(view==="pick"&&pickFrom==="onboard")){
+  if(view==="quiz"&&quiz.step===0) return;
+  if((view==="quiz"&&quiz.step>=1)||(view==="pick"&&pickFrom==="onboard")){
     history.back();
     return;
   }
