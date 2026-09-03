@@ -1,6 +1,6 @@
 # Forge
 
-Personal A/B strength tracker.
+Personal strength tracker. First open on a new phone asks three questions and recommends a program. Existing `forge-ab-v1` saves keep their lifts.
 
 Open in the gym:
 https://jasonpolachak.github.io/forge-ab/
