@@ -4,8 +4,8 @@
   "start_url": "/forge-ab/",
   "scope": "/forge-ab/",
   "display": "standalone",
-  "background_color": "#101214",
-  "theme_color": "#101214",
+  "background_color": "#0c0620",
+  "theme_color": "#0c0620",
   "icons": [
     {
       "src": "/forge-ab/icon-192.png",
