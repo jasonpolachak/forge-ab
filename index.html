@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.13</title>
+<title>Forge 0.6.14</title>
 <style>
 :root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
@@ -36,6 +36,8 @@ small{display:block;color:var(--muted);font-size:11px;font-weight:700;letter-spa
 .row{display:flex;gap:8px;align-items:center;margin-top:8px}
 input{width:100%;background:var(--well);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);font:inherit}
 .sr input{min-height:52px;font-size:22px;font-weight:800;text-align:center;flex:1}
+.srset{flex-wrap:wrap}
+.srset input{min-width:52px}
 .set{display:grid;grid-template-columns:32px 1fr 52px 52px;gap:8px;align-items:center;background:var(--well);border:2px solid var(--border);border-radius:14px;padding:10px;margin-top:10px}
 .set.hit{background:#143322;border-color:#3dba7a}
 .set.miss{background:#3a1c18;border-color:#e15b4a}
@@ -83,7 +85,7 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.13",K="forge-ab-v1";
+var V="0.6.14",K="forge-ab-v1";
 var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear"];
 var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],programId:null,goal:null,daysWk:null,gear:null,
 A:{name:"Workout A",ex:[
@@ -804,6 +806,18 @@ function atLocalNoon(ymd){
   if(!y||!m||!d) return NaN;
   return new Date(y,m-1,d,12,0,0,0).getTime();
 }
+function makeSetR(s,r){
+  var a=[],i,n=Math.max(1,Math.round(+s)||1),rep=Math.max(1,Math.round(+r)||1);
+  for(i=0;i<n;i++) a.push(rep);
+  return a;
+}
+function resizeSetR(L){
+  var s=Math.max(1,Math.round(+L.s)||1);
+  var r=Math.max(1,Math.round(+L.r)||1);
+  if(!L.setR) L.setR=[];
+  while(L.setR.length<s) L.setR.push(L.setR.length?L.setR[L.setR.length-1]:r);
+  if(L.setR.length>s) L.setR.length=s;
+}
 function fillLogLifts(){
   var w=S[logForm.k];
   if(!w||!w.ex){logForm.lifts=[];return}
@@ -811,9 +825,9 @@ function fillLogLifts(){
   logForm.lifts=w.ex.map(function(e){
     var n=e.n||"";
     if(e.optional && !String(n).trim()) hasEmpty=1;
-    return {id:e.id,n:n,s:e.s,r:e.r,w:e.w,hit:1,optional:e.optional?1:0};
+    return {id:e.id,n:n,s:e.s,r:e.r,w:e.w,hit:1,optional:e.optional?1:0,setR:makeSetR(e.s,e.r)};
   });
-  if(!hasEmpty) logForm.lifts.push({id:"logextra_"+logForm.k,n:"",s:3,r:8,w:0,hit:1,optional:1});
+  if(!hasEmpty) logForm.lifts.push({id:"logextra_"+logForm.k,n:"",s:3,r:8,w:0,hit:1,optional:1,setR:makeSetR(3,8)});
 }
 function initLogForm(){
   logForm={date:yesterdayYmd(),k:next(),lifts:[]};
@@ -831,6 +845,16 @@ function setLogSR(i,k,v,quiet){
   v=Math.round(+v);
   if(!isFinite(v)||v<1){ if(!quiet) draw(); return; }
   L[k]=v;
+  if(k==="s") resizeSetR(L);
+  if(!quiet) draw();
+}
+function setLogSetR(i,si,v,quiet){
+  var L=logForm.lifts[i]; if(!L) return;
+  resizeSetR(L);
+  if(si<0||si>=L.setR.length) return;
+  v=Math.round(+v);
+  if(!isFinite(v)||v<0){ if(!quiet) draw(); return; }
+  L.setR[si]=v;
   if(!quiet) draw();
 }
 function setLogW(i,v){v=+v;if(!isFinite(v)||!logForm.lifts[i])return;logForm.lifts[i].w=v}
@@ -844,6 +868,14 @@ function logSRRow(L,i){
     '<input type="number" inputmode="numeric" min="1" value="'+L.s+'" oninput="setLogSR('+i+',\'s\',this.value,1)" onchange="setLogSR('+i+',\'s\',this.value)">'+
     '<div class="unit">×</div>'+
     '<input type="number" inputmode="numeric" min="1" value="'+L.r+'" oninput="setLogSR('+i+',\'r\',this.value,1)" onchange="setLogSR('+i+',\'r\',this.value)"></div>';
+}
+function logSetReps(L,i){
+  resizeSetR(L);
+  var html='<div class="label" style="margin-top:10px">Reps per set</div><div class="row sr srset">';
+  L.setR.forEach(function(r,si){
+    html+='<input type="number" inputmode="numeric" min="0" value="'+r+'" oninput="setLogSetR('+i+','+si+',this.value,1)" onchange="setLogSetR('+i+','+si+',this.value)">';
+  });
+  return html+'</div>';
 }
 function logView(){
   var html=header("Log past workout",1)+
@@ -860,7 +892,7 @@ function logView(){
     if(L.optional && !named) html+='<div class="label">Custom (optional) · '+scheme(L)+'</div>';
     else {
       if(L.optional) html+='<div class="label">Custom (optional) · '+scheme(L)+'</div>';
-      html+=logSRRow(L,i);
+      html+=logSRRow(L,i)+logSetReps(L,i);
     }
     html+='<input placeholder="Name this lift to add it" value="'+esc(L.n)+'" oninput="if(logForm.lifts['+i+'])logForm.lifts['+i+'].n=this.value" onchange="setLogN('+i+',this.value)">';
     if(L.optional && !named){ html+='</div>'; return; }
@@ -888,10 +920,15 @@ function saveLog(){
     k:logForm.k,
     at:at,
     lifts:lifts.map(function(L){
-      var sets=[],i,hit=L.hit?1:0,n=String(L.n).trim();
-      var s=Math.max(1,Math.round(+L.s)||1), r=Math.max(1,Math.round(+L.r)||1);
-      for(i=0;i<s;i++) sets.push({r:r,ok:hit?1:2});
-      return {id:L.id,n:n,w:+L.w||0,s:s,r:r,sets:sets,hit:!!hit};
+      var hit=L.hit?1:0,n=String(L.n).trim();
+      var r=Math.max(1,Math.round(+L.r)||1);
+      resizeSetR(L);
+      var sets=L.setR.map(function(sr){
+        var rr=Math.round(+sr);
+        if(!isFinite(rr)||rr<0) rr=r;
+        return {r:rr,ok:hit?1:2};
+      });
+      return {id:L.id,n:n,w:+L.w||0,s:sets.length,r:r,sets:sets,hit:!!hit};
     })
   });
   S.hist.sort(function(a,b){return (+b.at||0)-(+a.at||0)});
