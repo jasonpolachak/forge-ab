@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.12</title>
+<title>Forge 0.6.13</title>
 <style>
 :root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
@@ -83,7 +83,7 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.12",K="forge-ab-v1";
+var V="0.6.13",K="forge-ab-v1";
 var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear"];
 var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],programId:null,goal:null,daysWk:null,gear:null,
 A:{name:"Workout A",ex:[
@@ -118,18 +118,15 @@ function jasonTemplate(){
       bar("squat","Squat",5,5,5,45),
       bar("bench","Bench Press",5,5,5,45),
       X("pullup","Pull-up",5,3,5,0,{seed:"bw",prog:"pullup",repCap:12,rFloor:5,floor:0}),
-      logx("situp","Sit-ups"),
-      logx("curl","Arm curls"),
-      logx("swing","Kettlebell swings"),
-      custom("A")
+      custom("A"),
+      custom("A2")
     ]),
     B:day("Workout B",[
       bar("squat","Squat",5,5,5,45),
       bar("ohp","Overhead Press",5,5,5,45),
       bar("dl","Deadlift",1,5,10,95),
-      logx("situp","Sit-ups"),
-      logx("curl","Arm curls"),
-      custom("B")
+      custom("B"),
+      custom("B2")
     ])
   };
 }
@@ -308,6 +305,34 @@ function continueFive(){
   save();
   go("home");
 }
+function knownW(){
+  var m={};
+  ["A","B","C"].forEach(function(k){
+    if(!S[k]||!S[k].ex) return;
+    S[k].ex.forEach(function(e){
+      if(e&&e.id!=null&&e.w!=null&&!(e.id in m)) m[e.id]=e.w;
+    });
+  });
+  return m;
+}
+function paintW(day,m){
+  var keep={squat:1,bench:1,ohp:1,dl:1,pullup:1};
+  day.ex.forEach(function(e){
+    if(keep[e.id]&&(e.id in m)) e.w=m[e.id];
+  });
+}
+function applyMyPlan(){
+  var w=knownW();
+  var t=jasonTemplate();
+  paintW(t.A,w); paintW(t.B,w);
+  S.A=t.A; S.B=t.B;
+  delete S.C;
+  S.programId="stronglifts-5x5";
+  S.sess=null; sess=null;
+  save();
+  go("home");
+  toast("My plan");
+}
 function applyProgram(id){
   var p=PROGRAMS[id]; if(!p) return;
   var t=p.make();
@@ -363,6 +388,7 @@ function liftBlock(k,e,i){
 function home(){
   var k=next(),w=S[k],h=S.hist[0]||null,html=header("Forge")+
     '<div class="card"><div class="label">Program</div><div class="name" style="font-size:22px">'+esc(programName())+'</div>'+
+    '<button class="btn btn2" onclick="applyMyPlan()">My plan</button>'+
     '<button class="quiet" onclick="goPick()">Change program</button></div>'+
     '<div class="card"><div class="label">Up next</div><div class="name">'+esc(w.name)+'</div>'+
     '<p class="muted">Rest '+(S.rest||90)+'s</p>';
