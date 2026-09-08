@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.14</title>
+<title>Forge 0.6.15</title>
 <style>
 :root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
@@ -75,6 +75,9 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 .wrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0}
 .why{color:var(--muted);font-size:13px;line-height:1.45;margin:8px 0 0}
 .quiet{display:block;width:auto;padding:8px 0 0;border:0;background:transparent;color:var(--muted);font-weight:700;font-size:13px}
+.ghost{border-style:dashed}
+.card.ghost{background:transparent}
+.ghost input,input.ghost{border-style:dashed}
 .park .name{font-size:18px}
 .fold>summary{list-style:none;cursor:pointer;min-height:52px;display:flex;align-items:center;color:var(--muted);font-weight:700;font-size:13px;margin:0}
 .fold>summary::-webkit-details-marker{display:none}
@@ -85,7 +88,7 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.14",K="forge-ab-v1";
+var V="0.6.15",K="forge-ab-v1";
 var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear"];
 var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],programId:null,goal:null,daysWk:null,gear:null,
 A:{name:"Workout A",ex:[
@@ -374,10 +377,13 @@ function header(title,back,sub){
 }
 function liftBlock(k,e,i){
   var note=seedNote(e);
-  var html='<div class="label" style="margin-top:10px">'+(e.optional?'Custom (optional)':esc(e.n||"Custom"))+' · '+scheme(e)+'</div>';
+  var empty=!!(e.optional&&!String(e.n||"").trim());
+  var html=empty
+    ?'<p class="muted" style="margin-top:10px">Optional extra</p>'
+    :'<div class="label" style="margin-top:10px">'+(e.optional?'Custom (optional)':esc(e.n||"Custom"))+' · '+scheme(e)+'</div>';
   if(e.optional){
-    html+='<input placeholder="Name this lift to add it" value="'+esc(e.n)+'" onchange="S.'+k+'.ex['+i+'].n=this.value;save();draw()">';
-    if(!e.n) return html;
+    html+='<input'+(empty?' class="ghost"':'')+' placeholder="'+(empty?'Name to add':'Name this lift to add it')+'" value="'+esc(e.n)+'" onchange="S.'+k+'.ex['+i+'].n=this.value;save();draw()">';
+    if(empty) return html;
   }
   html+='<div class="row">'+
     '<button class="icon" onclick="nudge(\''+k+'\','+i+',-step())">−'+step()+'</button>'+
@@ -778,7 +784,8 @@ function histView(){
       h.lifts.forEach(function(L,li){
         var sets="";
         if(L.sets) L.sets.forEach(function(s,i){sets+=(i?", ":"")+(s.ok===1?"✓":s.ok===2?"✕":"·")+s.r});
-        html+='<p style="margin:8px 0">'+esc(L.n)+' · '+L.w+' '+u()+(sets?" · "+sets:"")+(L.hit?" · hit":"")+'</p>';
+        var sch=(L.s!=null&&L.r!=null)?scheme(L):"";
+        html+='<p style="margin:8px 0">'+esc(L.n)+(sch?" · "+sch:"")+' · '+L.w+' '+u()+(sets?" · "+sets:"")+(L.hit?" · hit":"")+'</p>';
         if(!hi) html+='<div class="row"><button class="icon" onclick="fixHist(0,'+li+',-step())">−'+step()+'</button><button class="icon" onclick="fixHist(0,'+li+',step())">+'+step()+'</button><span class="muted">Fix last workout weight</span></div>';
       });
     } else {
@@ -888,13 +895,13 @@ function logView(){
   html+='</div>';
   logForm.lifts.forEach(function(L,i){
     var named=String(L.n||"").trim();
-    html+='<div class="card">';
-    if(L.optional && !named) html+='<div class="label">Custom (optional) · '+scheme(L)+'</div>';
+    html+='<div class="card'+(L.optional && !named?' ghost':'')+'">';
+    if(L.optional && !named) html+='<p class="muted">Optional extra</p>';
     else {
       if(L.optional) html+='<div class="label">Custom (optional) · '+scheme(L)+'</div>';
       html+=logSRRow(L,i)+logSetReps(L,i);
     }
-    html+='<input placeholder="Name this lift to add it" value="'+esc(L.n)+'" oninput="if(logForm.lifts['+i+'])logForm.lifts['+i+'].n=this.value" onchange="setLogN('+i+',this.value)">';
+    html+='<input placeholder="'+(L.optional && !named?'Name to add':'Name this lift to add it')+'" value="'+esc(L.n)+'" oninput="if(logForm.lifts['+i+'])logForm.lifts['+i+'].n=this.value" onchange="setLogN('+i+',this.value)">';
     if(L.optional && !named){ html+='</div>'; return; }
     html+='<div class="row">'+
       '<button class="icon" onclick="nudgeLog('+i+',-step())">−'+step()+'</button>'+
