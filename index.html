@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.15</title>
+<title>Forge 0.6.16</title>
 <style>
 :root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
@@ -88,7 +88,7 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.15",K="forge-ab-v1";
+var V="0.6.16",K="forge-ab-v1";
 var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear"];
 var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],programId:null,goal:null,daysWk:null,gear:null,
 A:{name:"Workout A",ex:[
@@ -229,7 +229,7 @@ function load(){
   if(!p) return clone(D);
   return mergeSave(p);
 }
-var S=load(),view="home",sess=null,timer=null,left=0,restEnds=0,lastRes=[],lastMarked=0,restTold=0,wakeLock=null,logForm=null,homeSet=0;
+var S=load(),view="home",sess=null,timer=null,left=0,restEnds=0,lastRes=[],lastMarked=0,restTold=0,restNeedBeep=0,wakeLock=null,logForm=null,homeSet=0,audioCtx=null;
 var quiz={step:0,goal:null,daysWk:null,gear:null},pickFrom="onboard";
 if(!S.rest) S.rest=90;
 var rawBoot=loadRaw();
@@ -400,9 +400,15 @@ function home(){
     '<button class="quiet" onclick="goPick()">Change program</button></div>'+
     '<div class="card"><div class="label">Up next</div><div class="name">'+esc(w.name)+'</div>'+
     '<p class="muted">Rest '+(S.rest||90)+'s</p>';
+  if(S.last&&S[S.last]) html+='<p class="muted">Last: '+esc(S[S.last].name)+'</p>';
   w.ex.forEach(function(e,i){html+=liftBlock(k,e,i)});
+  var open=openSnap();
+  if(open){
+    var on=(S[open.k]&&S[open.k].name)||("Workout "+open.k);
+    html+='<button class="btn" onclick="resumeSess()">Resume '+esc(on)+'</button>';
+  }
   dayKeys().forEach(function(dk){
-    html+='<button class="btn'+(dk===k?'':' btn2')+'" onclick="start(\''+dk+'\')">Start '+esc(S[dk].name)+'</button>';
+    html+='<button class="btn'+((!open&&dk===k)?'':' btn2')+'" onclick="start(\''+dk+'\')">Start '+esc(S[dk].name)+(dk===k?' · up next':'')+'</button>';
   });
   html+='</div>';
   html+='<div class="card">'+
@@ -520,11 +526,26 @@ function copyLift(e){
   for(i=0;i<e.s;i++) log.push({r:e.r,ok:0});
   return {id:e.id,n:e.n,s:e.s,r:e.r,inc:e.inc,w:e.w,log:log,prog:e.prog||"linear",lastAmrap:e.lastAmrap||0,repCap:e.repCap,rFloor:e.rFloor,seed:e.seed,t2r:e.t2r,floor:e.floor};
 }
+function openSnap(){
+  if(sess&&sess.ex&&sess.ex.length) return sess;
+  var p=S.sess;
+  if(p&&p.ex&&p.ex.length) return p;
+  return null;
+}
+function resumeSess(){
+  unlockAudio();
+  if(!hydrateSess()){toast("No workout");return}
+  keepAwake();
+  if(view==="sess"){draw();return}
+  go("sess");
+}
 function start(k){
+  if(openSnap()){resumeSess();return}
+  unlockAudio();
   var w=S[k];
   sess={k:k,i:0,ex:w.ex.filter(function(e){return !e.optional||(e.n&&String(e.n).trim())}).map(copyLift)};
   if(!sess.ex.length){toast("No lifts");return}
-  left=0; restEnds=0; lastMarked=0; persistSess(); keepAwake(); go("sess");
+  left=0; restEnds=0; lastMarked=0; restTold=1; restNeedBeep=0; persistSess(); keepAwake(); go("sess");
 }
 function doneCount(e){return e.log.filter(function(s){return s.ok}).length}
 function wLabel(e){
@@ -574,12 +595,22 @@ function adjW(d){
   toast(e.n+" "+e.w+" "+u());
   draw();
 }
-function beep(){
+function unlockAudio(){
   try{
     var AC=window.AudioContext||window.webkitAudioContext;
     if(!AC) return;
-    var ctx=new AC();
-    var now=ctx.currentTime;
+    if(!audioCtx) audioCtx=new AC();
+    if(audioCtx.state==="suspended"){
+      var p=audioCtx.resume();
+      if(p&&p.catch) p.catch(function(){});
+    }
+  }catch(e){}
+}
+function beep(){
+  try{
+    unlockAudio();
+    if(!audioCtx) return;
+    var ctx=audioCtx, now=ctx.currentTime;
     for(var i=0;i<3;i++){
       var o=ctx.createOscillator(), g=ctx.createGain();
       o.type="sine"; o.frequency.value=880;
@@ -589,11 +620,11 @@ function beep(){
       o.connect(g); g.connect(ctx.destination);
       o.start(now+i*0.22); o.stop(now+i*0.22+0.18);
     }
-    setTimeout(function(){ try{ ctx.close(); }catch(e){} }, 900);
   }catch(e){}
 }
 function startRest(){
   restTold=0;
+  restNeedBeep=0;
   if(timer)clearInterval(timer);
   restEnds=Date.now()+(S.rest||90)*1000;
   left=S.rest||90;
@@ -612,27 +643,39 @@ function tick(fromBg){
     if(!restTold){
       restTold=1;
       toast("Rest over");
-      if(S.sound && !fromBg && !document.hidden) beep();
-      if(navigator.vibrate) navigator.vibrate([200,80,200,80,200]);
+      try{ if(navigator.vibrate) navigator.vibrate([200,80,200,80,200]); }catch(e){}
+      if(S.sound){
+        beep();
+        if(document.hidden) restNeedBeep=1;
+      }
     }
     draw();
   }
 }
+function flushRestBeep(){
+  if(!restNeedBeep||!S.sound) return;
+  restNeedBeep=0;
+  beep();
+  try{ if(navigator.vibrate) navigator.vibrate([200,80,200,80,200]); }catch(e){}
+}
 function mark(i,ok){
+  unlockAudio();
   sess.ex[sess.i].log[i].ok=ok;
   lastMarked=i;
   startRest();
   toast(ok===1?("Set "+(i+1)+" done"):("Set "+(i+1)+" missed"));
   draw();
 }
-function stopT(){if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;persistSess();draw()}
+function stopT(){if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;restNeedBeep=0;persistSess();draw()}
 document.addEventListener("visibilitychange",function(){
   if(document.hidden){dropWake();return}
+  unlockAudio();
   tick(true);
+  flushRestBeep();
   if(sess&&view==="sess")keepAwake();
 });
-window.addEventListener("focus",function(){tick(true)});
-window.addEventListener("pageshow",function(){tick(true)});
+window.addEventListener("focus",function(){unlockAudio();tick(true);flushRestBeep()});
+window.addEventListener("pageshow",function(){unlockAudio();tick(true);flushRestBeep()});
 function fmt(s){s=Math.max(0,s);var m=Math.floor(s/60),x=String(s%60);if(x.length<2)x="0"+x;return m+":"+x}
 function rnd(n){return Math.round(n*2)/2}
 function floorW(e){
@@ -1101,7 +1144,7 @@ function progView(){
 function quitSess(){
   if(!confirm("Quit workout?"))return;
   dropWake();
-  if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;
+  if(timer)clearInterval(timer);timer=null;left=0;restEnds=0;restNeedBeep=0;
   sess=null;S.sess=null;save();go("home");
 }
 function resetApp(){
@@ -1144,12 +1187,13 @@ function impData(){
   };
   inp.click();
 }
-function restoreOpen(){
+function hydrateSess(){
+  if(sess&&sess.ex&&sess.ex.length) return true;
   var p=S.sess;
-  if(!p||!p.ex||!p.ex.length)return;
-  if(dayKeys().indexOf(p.k)<0 && p.k!=="A"&&p.k!=="B"&&p.k!=="C")return;
+  if(!p||!p.ex||!p.ex.length) return false;
+  if(dayKeys().indexOf(p.k)<0 && p.k!=="A"&&p.k!=="B"&&p.k!=="C") return false;
   sess={k:p.k,i:+p.i||0,ex:p.ex};
-  if(sess.i<0||sess.i>=sess.ex.length)sess.i=0;
+  if(sess.i<0||sess.i>=sess.ex.length) sess.i=0;
   lastMarked=+p.lastMarked||0;
   restEnds=+p.restEnds||0;
   if(restEnds>Date.now()){
@@ -1160,6 +1204,10 @@ function restoreOpen(){
   }else{
     restEnds=0;left=0;restTold=1;
   }
+  return true;
+}
+function restoreOpen(){
+  if(!hydrateSess()) return;
   view="sess";
   keepAwake();
 }
