@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.19</title>
+<title>Forge 0.6.20</title>
 <style>
 :root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
@@ -93,7 +93,7 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.19",K="forge-ab-v1";
+var V="0.6.20",K="forge-ab-v1";
 var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear"];
 var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],programId:null,goal:null,daysWk:null,gear:null,
 A:{name:"Workout A",ex:[
@@ -648,7 +648,12 @@ function ensureWu(e){
   if(prev&&prev.length){
     for(i=0;i<next.length;i++){
       for(j=0;j<prev.length;j++){
-        if(prev[j].w===next[i].w&&prev[j].ok){next[i].ok=prev[j].ok;break}
+        if(prev[j].w===next[i].w&&prev[j].ok){
+          next[i].ok=prev[j].ok;
+          if(prev[j].at) next[i].at=prev[j].at;
+          if(prev[j].rest!=null) next[i].rest=prev[j].rest;
+          break;
+        }
       }
     }
   }
@@ -673,12 +678,39 @@ function skipWu(){
   toast("Warm-ups skipped");
   draw();
 }
+function liftLastAt(e,exceptLog,exceptWu){
+  var t=0,i,s;
+  if(e&&e.wu&&!e.wuSkip){
+    for(i=0;i<e.wu.length;i++){
+      if(exceptWu!=null&&i===exceptWu) continue;
+      s=e.wu[i];
+      if(s&&s.ok===1&&s.at&&s.at>t) t=s.at;
+    }
+  }
+  if(e&&e.log){
+    for(i=0;i<e.log.length;i++){
+      if(exceptLog!=null&&i===exceptLog) continue;
+      s=e.log[i];
+      if(s&&s.at&&(s.ok===1||s.ok===2)&&s.at>t) t=s.at;
+    }
+  }
+  return t;
+}
+function stampMark(obj,prevAt){
+  var now=Date.now();
+  obj.at=now;
+  if(prevAt) obj.rest=Math.max(0,Math.round((now-prevAt)/1000));
+  else delete obj.rest;
+}
 function markWu(i,ok){
   unlockAudio();
   var e=sess.ex[sess.i];
   ensureWu(e);
   if(!e.wu||!e.wu[i]) return;
+  var prev=liftLastAt(e,null,i);
   e.wu[i].ok=ok;
+  if(ok===1) stampMark(e.wu[i],prev);
+  else {delete e.wu[i].at;delete e.wu[i].rest}
   lastMarked=i;
   startRest();
   toast(ok===1?"Warm-up done":"Warm-up skipped");
@@ -899,7 +931,9 @@ function flushRestBeep(){
 }
 function mark(i,ok){
   unlockAudio();
-  sess.ex[sess.i].log[i].ok=ok;
+  var e=sess.ex[sess.i], prev=liftLastAt(e,i,null);
+  e.log[i].ok=ok;
+  stampMark(e.log[i],prev);
   lastMarked=i;
   startRest();
   toast(ok===1?("Set "+(i+1)+" done"):("Set "+(i+1)+" missed"));
@@ -1017,22 +1051,31 @@ function nxt(){
     return {id:e.id,n:e.n,w:e.w,hit:r.hit,msg:r.msg};
   });
   S.last=sess.k;
-  S.hist.unshift({
+  var rec={
     k:sess.k,
     at:Date.now(),
     lifts:sess.ex.map(function(e){
       return {
         id:e.id,n:e.n,w:e.w,s:e.s,r:e.r,
-        sets:e.log.map(function(s){return {r:s.r,ok:s.ok}}),
+        sets:e.log.map(function(s){
+          var o={r:s.r,ok:s.ok};
+          if(s.rest!=null&&isFinite(+s.rest)&&s.ok) o.rest=Math.round(+s.rest);
+          return o;
+        }),
         hit:e.log.every(function(s){return s.ok===1&&s.r>=e.r})
       };
     })
-  });
+  };
+  var avg=restAvg(rec);
+  if(avg!=null) rec.rest=avg;
+  S.hist.unshift(rec);
   S.hist=S.hist.slice(0,40);
   S.sess=null; save(); sess=null; dropWake(); go("done");
 }
 function doneView(){
   var html=header("Saved",1)+'<div class="card">';
+  var rl=restLine(S.hist[0]);
+  if(rl) html+='<p class="muted">'+esc(rl)+'</p>';
   lastRes.forEach(function(r){html+='<p style="margin:8px 0">'+esc(r.n)+' · '+(r.msg||(r.hit?"hit — weight up next time":"same weight"))+' · '+r.w+' '+u()+'</p>'});
   html+='</div><button class="btn" onclick="go(\'home\')">Back home</button>'+
     '<button class="btn btn2" onclick="go(\'hist\')">Workout history</button>'+
@@ -1055,6 +1098,32 @@ function editView(k){
   html+='<button class="btn" onclick="S.'+k+'.ex.push({id:\'ex\'+Math.random().toString(36).slice(2,7),n:\'New lift\',s:3,r:8,inc:5,w:'+(S.units==="kg"?20:45)+',prog:\'linear\'});save();draw()">+ Add lift</button></div>';
   return html;
 }
+function collectRests(h){
+  var out=[],i,j,L,s;
+  if(!h||!h.lifts) return out;
+  for(i=0;i<h.lifts.length;i++){
+    L=h.lifts[i];
+    if(!L||!L.sets) continue;
+    for(j=0;j<L.sets.length;j++){
+      s=L.sets[j];
+      if(!s||(s.ok!==1&&s.ok!==2)) continue;
+      if(s.rest==null||!isFinite(+s.rest)||+s.rest<0) continue;
+      out.push(+s.rest);
+    }
+  }
+  return out;
+}
+function restAvg(h){
+  var a=collectRests(h),t=0,i;
+  if(!a.length) return null;
+  for(i=0;i<a.length;i++) t+=a[i];
+  return Math.round(t/a.length);
+}
+function restLine(h){
+  var avg=h&&h.rest!=null&&isFinite(+h.rest)?Math.round(+h.rest):restAvg(h);
+  if(avg==null) return "";
+  return "rest ~"+fmt(avg)+" avg";
+}
 function histView(){
   var html=header("History",1);
   html+='<div class="card">';
@@ -1062,7 +1131,9 @@ function histView(){
   html+='<button class="btn" onclick="openLog()">Log past workout</button></div>';
   S.hist.forEach(function(h,hi){
     var name=(S[h.k]&&S[h.k].name)||("Workout "+h.k);
+    var rl=restLine(h);
     html+='<div class="card"><div class="label">'+new Date(h.at).toLocaleString()+'</div><div class="name" style="font-size:20px">'+esc(name)+'</div>';
+    if(rl) html+='<p class="muted">'+esc(rl)+'</p>';
     if(h.lifts&&h.lifts.length){
       h.lifts.forEach(function(L,li){
         var sets="";
