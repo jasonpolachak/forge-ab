@@ -1,4 +1,4 @@
-var CACHE="forge-ab-0.6.19";
+var CACHE="forge-ab-0.6.20";
 var SHELL=["./","index.html","manifest.webmanifest","icon-192.png","icon-512.png"];
 
 self.addEventListener("install",function(e){
