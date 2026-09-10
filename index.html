@@ -613,8 +613,8 @@ function sessView(){
   var e=sess.ex[sess.i], dc=doneCount(e), lastLift=sess.i===sess.ex.length-1, cue=weightCue(e), plates=platesLine(e);
   var html='<div class="top"><div class="brand"><button class="icon" onclick="go(\'home\')">←</button>'+
     '<div><div class="label" style="margin:0">'+esc(S[sess.k].name)+'</div><p class="muted">'+(sess.i+1)+' of '+sess.ex.length+' lifts</p></div></div>'+
-    '<div style="text-align:right"><span class="ver">v'+V+'</span>'+
-    '<button class="snd" onclick="toggleSound()">'+soundLabel()+'</button></div></div>';
+    '<span class="ver">v'+V+'</span></div>'+
+    '<div style="text-align:right;margin:-8px 0 12px"><button class="snd" onclick="toggleSound()">'+soundLabel()+'</button></div>';
   html+='<div class="card"><div class="label">Now lifting</div><div class="name">'+esc(e.n)+'</div>'+
     '<p class="muted">'+scheme(e)+(e.prog==="log"?" · log only":"")+'</p>'+
     '<div class="wrow"><button class="icon" onclick="adjW(-step())">−'+step()+'</button>'+
