@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.18</title>
+<title>Forge 0.6.19</title>
 <style>
 :root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
@@ -44,6 +44,10 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 .set .tag{font-size:11px;font-weight:800;letter-spacing:.06em}
 .set.hit .tag{color:#3dba7a}
 .set.miss .tag{color:#ffb4ab}
+.set.wu{grid-template-columns:76px 1fr 52px 52px}
+.set.wu .tag{color:var(--cyan)}
+.set.wu.hit .tag{color:#3dba7a}
+.set.wu.miss .tag{color:#ffb4ab}
 .icon{width:52px;height:52px;border:0;border-radius:14px;background:var(--icon);color:var(--text);font-size:22px;font-weight:800}
 .set.hit .icon.go{background:#3dba7a;color:#062214}
 .set.miss .icon.no{background:#e15b4a;color:#2a0c0a}
@@ -89,7 +93,7 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.18",K="forge-ab-v1";
+var V="0.6.19",K="forge-ab-v1";
 var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear"];
 var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],programId:null,goal:null,daysWk:null,gear:null,
 A:{name:"Workout A",ex:[
@@ -548,6 +552,7 @@ function start(k){
   var w=S[k];
   sess={k:k,i:0,ex:w.ex.filter(function(e){return !e.optional||(e.n&&String(e.n).trim())}).map(copyLift)};
   if(!sess.ex.length){toast("No lifts");return}
+  sess.ex.forEach(ensureWu);
   left=0; restEnds=0; lastMarked=0; restTold=1; restNeedBeep=0; persistSess(); keepAwake(); go("sess");
 }
 function doneCount(e){return e.log.filter(function(s){return s.ok}).length}
@@ -588,9 +593,10 @@ function usesBar(e){
 function plateSizes(){return S.units==="kg"?[20,10,5,2.5,1.25]:[45,25,10,5,2.5]}
 function barW(){return S.units==="kg"?20:45}
 function trimNum(n){return String(Math.round(n*100)/100)}
-function platesLine(e){
+function platesLine(e,w){
   if(!usesBar(e)) return "";
-  var w=+e.w, bar=barW(), sizes=plateSizes(), remain, parts=[], i, n, p;
+  if(w==null) w=+e.w;
+  var bar=barW(), sizes=plateSizes(), remain, parts=[], i, n, p;
   if(!isFinite(w)||w<=bar) return "empty bar";
   remain=Math.round((w-bar)*50);
   for(i=0;i<sizes.length;i++){
@@ -603,6 +609,81 @@ function platesLine(e){
   if(!parts.length) return "empty bar";
   return parts.join(" + ")+" each side";
 }
+function plateStep(){return S.units==="kg"?2.5:5}
+function roundPlates(w){
+  var bar=barW(), step=plateStep();
+  if(!isFinite(w)||w<=bar) return bar;
+  return rnd(bar+Math.round((w-bar)/step)*step);
+}
+function needsWu(e){
+  if(!usesBar(e)) return false;
+  if(e.prog==="log") return false;
+  var w=+e.w;
+  return isFinite(w)&&w>barW();
+}
+function makeWu(e){
+  var work=+e.w, bar=barW(), out=[], seen={}, i, w, ramp;
+  if(!needsWu(e)) return out;
+  ramp=[{p:0,r:5},{p:0.5,r:5},{p:0.7,r:3},{p:0.9,r:2}];
+  for(i=0;i<ramp.length;i++){
+    w=ramp[i].p?roundPlates(work*ramp[i].p):bar;
+    if(w>=work||w<bar||seen[String(w)]) continue;
+    seen[String(w)]=1;
+    out.push({w:w,r:ramp[i].r,ok:0});
+  }
+  return out;
+}
+function ensureWu(e){
+  if(!e) return;
+  if(e.wuSkip) return;
+  if(!needsWu(e)){e.wu=[];return}
+  var next=makeWu(e), prev=e.wu, i, j, same;
+  if(prev&&prev.length===next.length){
+    same=1;
+    for(i=0;i<next.length;i++){
+      if(prev[i].w!==next[i].w||prev[i].r!==next[i].r){same=0;break}
+    }
+    if(same) return;
+  }
+  if(prev&&prev.length){
+    for(i=0;i<next.length;i++){
+      for(j=0;j<prev.length;j++){
+        if(prev[j].w===next[i].w&&prev[j].ok){next[i].ok=prev[j].ok;break}
+      }
+    }
+  }
+  e.wu=next;
+}
+function wuDone(e){return e&&e.wu?e.wu.filter(function(s){return s.ok}).length:0}
+function wuPending(e){return !!(e&&!e.wuSkip&&e.wu&&e.wu.some(function(s){return !s.ok}))}
+function wuLogged(e){return !!(e&&e.wu&&e.wu.some(function(s){return s.ok===1||s.ok===2}))}
+function curBarW(e){
+  if(e&&!e.wuSkip&&e.wu){
+    for(var i=0;i<e.wu.length;i++){
+      if(!e.wu[i].ok) return e.wu[i].w;
+    }
+  }
+  return e?e.w:0;
+}
+function skipWu(){
+  var e=sess&&sess.ex[sess.i];
+  if(!e) return;
+  e.wuSkip=1;
+  persistSess();
+  toast("Warm-ups skipped");
+  draw();
+}
+function markWu(i,ok){
+  unlockAudio();
+  var e=sess.ex[sess.i];
+  ensureWu(e);
+  if(!e.wu||!e.wu[i]) return;
+  e.wu[i].ok=ok;
+  lastMarked=i;
+  startRest();
+  toast(ok===1?"Warm-up done":"Warm-up skipped");
+  draw();
+}
 function soundLabel(){return S.sound?"Sound on":"Vibrate only"}
 function toggleSound(){
   S.sound=S.sound?0:1;
@@ -610,8 +691,22 @@ function toggleSound(){
   unlockAudio();
   draw();
 }
+function nowPlates(e){
+  var w=curBarW(e), plates=platesLine(e,w);
+  if(!plates) return "";
+  if(wuPending(e)&&w!==+e.w) return w+" "+u()+" · "+plates;
+  return plates;
+}
+function restHint(e,dc){
+  if(wuPending(e)) return "Warm-up logged. Then warm-up "+(wuDone(e)+1)+".";
+  if(wuLogged(e)&&dc===0) return "Warm-ups done. Rest, then start set 1.";
+  if(dc===0) return "Next lift. Rest, then start set 1.";
+  return "Set "+(lastMarked+1)+" logged. Then do set "+(lastMarked+2<=e.s?lastMarked+2:e.s)+".";
+}
 function sessView(){
-  var e=sess.ex[sess.i], dc=doneCount(e), lastLift=sess.i===sess.ex.length-1, cue=weightCue(e), plates=platesLine(e);
+  var e=sess.ex[sess.i], dc=doneCount(e), lastLift=sess.i===sess.ex.length-1, cue=weightCue(e);
+  ensureWu(e);
+  var plates=nowPlates(e), showWu=!!(e.wu&&e.wu.length&&!e.wuSkip), wuN=showWu?e.wu.length:0, wuD=wuDone(e);
   var html='<div class="top"><div class="brand"><button class="icon" onclick="go(\'home\')">←</button>'+
     '<div><div class="label" style="margin:0">'+esc(S[sess.k].name)+'</div><p class="muted">'+(sess.i+1)+' of '+sess.ex.length+' lifts</p></div></div>'+
     '<span class="ver">v'+V+'</span></div>'+
@@ -623,8 +718,22 @@ function sessView(){
     (plates?'<p class="muted" style="text-align:center">'+esc(plates)+'</p>':'')+
     (cue?'<p class="muted" style="text-align:center">'+esc(cue)+'</p>':'')+'</div>'+
     '<button class="icon" onclick="adjW(step())">+'+step()+'</button></div>'+
-    '<div class="status"><b>'+dc+' of '+e.s+' sets logged</b><br><span class="muted">'+
-    (dc<e.s?('Tap the green check after set '+(dc+1)+'.'):(lastLift?'All sets logged. Finish or add a lift.':'All sets logged. Go to next lift.'))+'</span></div></div>';
+    '<div class="status">'+(wuPending(e)
+      ?('<b>Warm-up '+(wuD+1)+' of '+wuN+'</b><br><span class="muted">Then '+scheme(e)+' at '+e.w+' '+u()+'. Skip if you are warm.</span>')
+      :('<b>'+dc+' of '+e.s+' sets logged</b><br><span class="muted">'+(dc<e.s?('Tap the green check after set '+(dc+1)+'.'):(lastLift?'All sets logged. Finish or add a lift.':'All sets logged. Go to next lift.'))+'</span>'))+
+    '</div></div>';
+  if(showWu){
+    e.wu.forEach(function(s,i){
+      var st=s.ok===1?'hit':s.ok===2?'miss':'';
+      var tag=s.ok===1?'DONE':s.ok===2?'SKIP':'WARM-UP';
+      html+='<div class="set wu '+st+'"><div class="tag">'+tag+'</div>'+
+        '<div><b>'+s.w+'</b> <span class="muted">× '+s.r+'</span></div>'+
+        '<button class="icon go" onclick="markWu('+i+',1)">✓</button>'+
+        '<button class="icon no" onclick="markWu('+i+',2)">✕</button></div>';
+    });
+    html+='<button class="btn btn2" onclick="skipWu()">Skip warm-ups</button>';
+    html+='<div class="label" style="margin-top:12px">Working sets</div>';
+  }
   e.log.forEach(function(s,i){
     var st=s.ok===1?'hit':s.ok===2?'miss':'';
     var tag=s.ok===1?'DONE':s.ok===2?'MISS':(e.lastAmrap&&i===e.log.length-1?'AMRAP':('SET '+(i+1)));
@@ -653,10 +762,14 @@ function sessView(){
   if(dc===e.s) html+='<button class="btn" onclick="nxt()">'+(sess.i<sess.ex.length-1?'Next lift':'Finish workout')+'</button>';
   html+='<button class="btn btn2" onclick="nxt()">Skip lift</button>';
   html+='<button class="btn btn2" onclick="quitSess()">Quit workout</button>';
-  if(left>0 && (sess.i>0 || logged(e))){
+  if(left>0 && (sess.i>0 || logged(e) || wuLogged(e))){
     html+='<div class="restbar go"><div class="label">Rest</div><div class="clock" id="clock">'+fmt(left)+'</div>'+
-      '<p class="muted">'+(dc===0?'Next lift. Rest, then start set 1.':'Set '+(lastMarked+1)+' logged. Then do set '+(lastMarked+2<=e.s?lastMarked+2:e.s)+'.')+'</p>'+
+      '<p class="muted">'+esc(restHint(e,dc))+'</p>'+
       '<button class="btn btn2" onclick="stopT()">Skip rest</button></div>';
+  } else if(wuPending(e)&&wuLogged(e)){
+    html+='<div class="restbar done"><div class="label">Ready</div><div class="name">Warm-up '+(wuD+1)+' · '+curBarW(e)+' '+u()+'</div></div>';
+  } else if(wuLogged(e)&&!e.wuSkip&&dc===0&&dc<e.s){
+    html+='<div class="restbar done"><div class="label">Ready</div><div class="name">Do set 1 now</div></div>';
   } else if(dc>0 && dc<e.s){
     html+='<div class="restbar done"><div class="label">Ready</div><div class="name">Do set '+(dc+1)+' now</div></div>';
   }
@@ -703,6 +816,7 @@ function adjW(d){
   var e=sess.ex[sess.i];
   e.w=Math.max(0,Math.round((+e.w+d)*2)/2);
   if(e.prog!=="log") bump(e.id,function(x){x.w=e.w});
+  ensureWu(e);
   persistSess();
   toast(e.n+" "+e.w+" "+u());
   draw();
@@ -1320,6 +1434,7 @@ function hydrateSess(){
   if(dayKeys().indexOf(p.k)<0 && p.k!=="A"&&p.k!=="B"&&p.k!=="C") return false;
   sess={k:p.k,i:+p.i||0,ex:p.ex};
   if(sess.i<0||sess.i>=sess.ex.length) sess.i=0;
+  sess.ex.forEach(ensureWu);
   lastMarked=+p.lastMarked||0;
   restEnds=+p.restEnds||0;
   if(restEnds>Date.now()){
