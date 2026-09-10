@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.17</title>
+<title>Forge 0.6.18</title>
 <style>
 :root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
@@ -75,6 +75,7 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 .wrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0}
 .why{color:var(--muted);font-size:13px;line-height:1.45;margin:8px 0 0}
 .quiet{display:block;width:auto;padding:8px 0 0;border:0;background:transparent;color:var(--muted);font-weight:700;font-size:13px}
+.snd{display:inline-block;padding:6px 0 0;border:0;background:transparent;color:var(--muted);font-weight:700;font-size:13px;cursor:pointer}
 .ghost{border-style:dashed}
 .card.ghost{background:transparent}
 .ghost input,input.ghost{border-style:dashed}
@@ -88,7 +89,7 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.17",K="forge-ab-v1";
+var V="0.6.18",K="forge-ab-v1";
 var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear"];
 var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],programId:null,goal:null,daysWk:null,gear:null,
 A:{name:"Workout A",ex:[
@@ -430,7 +431,7 @@ function home(){
     '<input type="number" value="'+S.rest+'" min="30" step="15" onchange="S.rest=+this.value||90;save();draw()">'+
     '<button class="btn btn2" onclick="toggleU()">Units: '+u()+'</button>'+
     '<button class="btn btn2" onclick="toggleTheme()">Theme: '+(theme()==="gym"?"Gym":"Outrun")+'</button>'+
-    '<button class="btn btn2" onclick="S.sound=S.sound?0:1;save();draw()">'+(S.sound?'Rest alert: beep + vibrate':'Rest alert: vibrate only')+'</button>'+
+    '<button class="btn btn2" onclick="toggleSound()">'+(S.sound?'Rest alert: beep + vibrate':'Rest alert: vibrate only')+'</button>'+
     '<button class="btn btn2" onclick="resetApp()">Reset app</button></details>';
   return html;
 }
@@ -540,9 +541,9 @@ function resumeSess(){
   go("sess");
 }
 function start(k){
-  if(openSnap()){resumeSess();return}
   unlockAudio();
   addForm=null;
+  if(timer){clearInterval(timer);timer=null}
   var w=S[k];
   sess={k:k,i:0,ex:w.ex.filter(function(e){return !e.optional||(e.n&&String(e.n).trim())}).map(copyLift)};
   if(!sess.ex.length){toast("No lifts");return}
@@ -576,15 +577,49 @@ function weightCue(e){
   if(inc>0&&isFinite(w)&&p!=="log"&&p!=="bw"&&p!=="pullup") parts.push("next "+rnd(w+inc)+" if you hit (+"+inc+")");
   return parts.join(" · ");
 }
+function usesBar(e){
+  if(!e) return false;
+  if(e.seed==="db"||e.seed==="bw") return false;
+  if(e.prog==="bw"||e.prog==="pullup") return false;
+  if(e.prog==="log"&&e.seed!=="bar") return false;
+  return true;
+}
+function plateSizes(){return S.units==="kg"?[20,10,5,2.5,1.25]:[45,25,10,5,2.5]}
+function barW(){return S.units==="kg"?20:45}
+function trimNum(n){return String(Math.round(n*100)/100)}
+function platesLine(e){
+  if(!usesBar(e)) return "";
+  var w=+e.w, bar=barW(), sizes=plateSizes(), remain, parts=[], i, n, p;
+  if(!isFinite(w)||w<=bar) return "empty bar";
+  remain=Math.round((w-bar)*50);
+  for(i=0;i<sizes.length;i++){
+    p=Math.round(sizes[i]*100);
+    n=Math.floor(remain/p);
+    if(n>=2) parts.push(n+"\u00d7"+trimNum(sizes[i]));
+    else if(n===1) parts.push(trimNum(sizes[i]));
+    remain-=n*p;
+  }
+  if(!parts.length) return "empty bar";
+  return parts.join(" + ")+" each side";
+}
+function soundLabel(){return S.sound?"Sound on":"Vibrate only"}
+function toggleSound(){
+  S.sound=S.sound?0:1;
+  save();
+  unlockAudio();
+  draw();
+}
 function sessView(){
-  var e=sess.ex[sess.i], dc=doneCount(e), lastLift=sess.i===sess.ex.length-1, cue=weightCue(e);
+  var e=sess.ex[sess.i], dc=doneCount(e), lastLift=sess.i===sess.ex.length-1, cue=weightCue(e), plates=platesLine(e);
   var html='<div class="top"><div class="brand"><button class="icon" onclick="go(\'home\')">←</button>'+
     '<div><div class="label" style="margin:0">'+esc(S[sess.k].name)+'</div><p class="muted">'+(sess.i+1)+' of '+sess.ex.length+' lifts</p></div></div>'+
-    '<span class="ver">v'+V+'</span></div>';
+    '<div style="text-align:right"><span class="ver">v'+V+'</span>'+
+    '<button class="snd" onclick="toggleSound()">'+soundLabel()+'</button></div></div>';
   html+='<div class="card"><div class="label">Now lifting</div><div class="name">'+esc(e.n)+'</div>'+
     '<p class="muted">'+scheme(e)+(e.prog==="log"?" · log only":"")+'</p>'+
     '<div class="wrow"><button class="icon" onclick="adjW(-step())">−'+step()+'</button>'+
     '<div><div class="label" style="margin:0;text-align:center">'+wLabel(e)+'</div><div class="wbig">'+e.w+'</div><p class="muted" style="text-align:center">'+u()+'</p>'+
+    (plates?'<p class="muted" style="text-align:center">'+esc(plates)+'</p>':'')+
     (cue?'<p class="muted" style="text-align:center">'+esc(cue)+'</p>':'')+'</div>'+
     '<button class="icon" onclick="adjW(step())">+'+step()+'</button></div>'+
     '<div class="status"><b>'+dc+' of '+e.s+' sets logged</b><br><span class="muted">'+
@@ -617,7 +652,7 @@ function sessView(){
   if(dc===e.s) html+='<button class="btn" onclick="nxt()">'+(sess.i<sess.ex.length-1?'Next lift':'Finish workout')+'</button>';
   html+='<button class="btn btn2" onclick="nxt()">Skip lift</button>';
   html+='<button class="btn btn2" onclick="quitSess()">Quit workout</button>';
-  if(left>0){
+  if(left>0 && (sess.i>0 || logged(e))){
     html+='<div class="restbar go"><div class="label">Rest</div><div class="clock" id="clock">'+fmt(left)+'</div>'+
       '<p class="muted">'+(dc===0?'Next lift. Rest, then start set 1.':'Set '+(lastMarked+1)+' logged. Then do set '+(lastMarked+2<=e.s?lastMarked+2:e.s)+'.')+'</p>'+
       '<button class="btn btn2" onclick="stopT()">Skip rest</button></div>';
@@ -680,22 +715,35 @@ function unlockAudio(){
       var p=audioCtx.resume();
       if(p&&p.catch) p.catch(function(){});
     }
+    var o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    g.gain.value=0.0001;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    o.stop(audioCtx.currentTime+0.02);
   }catch(e){}
+}
+function playBeep(){
+  if(!audioCtx) return;
+  var ctx=audioCtx, now=ctx.currentTime, i, o, g;
+  for(i=0;i<3;i++){
+    o=ctx.createOscillator(); g=ctx.createGain();
+    o.type="sine"; o.frequency.value=880;
+    g.gain.setValueAtTime(0.0001, now+i*0.22);
+    g.gain.exponentialRampToValueAtTime(0.2, now+i*0.22+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now+i*0.22+0.16);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(now+i*0.22); o.stop(now+i*0.22+0.18);
+  }
 }
 function beep(){
   try{
     unlockAudio();
     if(!audioCtx) return;
-    var ctx=audioCtx, now=ctx.currentTime;
-    for(var i=0;i<3;i++){
-      var o=ctx.createOscillator(), g=ctx.createGain();
-      o.type="sine"; o.frequency.value=880;
-      g.gain.setValueAtTime(0.0001, now+i*0.22);
-      g.gain.exponentialRampToValueAtTime(0.2, now+i*0.22+0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, now+i*0.22+0.16);
-      o.connect(g); g.connect(ctx.destination);
-      o.start(now+i*0.22); o.stop(now+i*0.22+0.18);
+    if(audioCtx.state==="suspended"){
+      audioCtx.resume().then(playBeep).catch(function(){});
+      return;
     }
+    playBeep();
   }catch(e){}
 }
 function startRest(){
