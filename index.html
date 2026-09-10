@@ -541,6 +541,7 @@ function resumeSess(){
   go("sess");
 }
 function start(k){
+  if(openSnap()){resumeSess();return}
   unlockAudio();
   addForm=null;
   if(timer){clearInterval(timer);timer=null}
