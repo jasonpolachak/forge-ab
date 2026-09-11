@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.20</title>
+<title>Forge 0.6.21</title>
 <style>
 :root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
@@ -93,7 +93,7 @@ input{width:100%;background:var(--well);border:1px solid var(--border);border-ra
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.20",K="forge-ab-v1";
+var V="0.6.21",K="forge-ab-v1";
 var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear"];
 var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],programId:null,goal:null,daysWk:null,gear:null,
 A:{name:"Workout A",ex:[
@@ -758,20 +758,25 @@ function sessView(){
     e.wu.forEach(function(s,i){
       var st=s.ok===1?'hit':s.ok===2?'miss':'';
       var tag=s.ok===1?'DONE':s.ok===2?'SKIP':'WARM-UP';
+      var pl=platesLine(e,s.w);
       html+='<div class="set wu '+st+'"><div class="tag">'+tag+'</div>'+
-        '<div><b>'+s.w+'</b> <span class="muted">× '+s.r+'</span></div>'+
+        '<div><b>'+s.w+'</b> <span class="muted">× '+s.r+(pl?' · '+esc(pl):'')+'</span></div>'+
         '<button class="icon go" onclick="markWu('+i+',1)">✓</button>'+
         '<button class="icon no" onclick="markWu('+i+',2)">✕</button></div>';
     });
     html+='<button class="btn btn2" onclick="skipWu()">Skip warm-ups</button>';
     html+='<div class="label" style="margin-top:12px">Working sets</div>';
   }
+  var workPl=platesLine(e,+e.w);
   e.log.forEach(function(s,i){
     var st=s.ok===1?'hit':s.ok===2?'miss':'';
     var tag=s.ok===1?'DONE':s.ok===2?'MISS':(e.lastAmrap&&i===e.log.length-1?'AMRAP':('SET '+(i+1)));
-    html+='<div class="set '+st+'"><div class="tag">'+tag+'</div><div class="row" style="margin:0">'+
+    html+='<div class="set '+st+'"><div class="tag">'+tag+'</div><div>'+
+      '<div class="row" style="margin:0">'+
       '<button class="icon" onclick="chg('+i+',-1)">−</button><b>'+s.r+'</b>'+
       '<button class="icon" onclick="chg('+i+',1)">+</button></div>'+
+      (workPl?'<p class="muted" style="margin:4px 0 0">'+esc(workPl)+'</p>':'')+
+      '</div>'+
       '<button class="icon go" onclick="mark('+i+',1)">✓</button>'+
       '<button class="icon no" onclick="mark('+i+',2)">✕</button></div>';
   });
