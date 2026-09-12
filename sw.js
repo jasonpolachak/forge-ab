@@ -1,5 +1,6 @@
-var CACHE="forge-ab-0.6.22";
+var CACHE="forge-ab-0.6.23";
 var SHELL=["./","index.html","manifest.webmanifest","icon-192.png","icon-512.png"];
+var restTimer=null;
 
 self.addEventListener("install",function(e){
   e.waitUntil(caches.open(CACHE).then(function(c){return c.addAll(SHELL)}));
@@ -11,6 +12,53 @@ self.addEventListener("activate",function(e){
     caches.keys().then(function(keys){
       return Promise.all(keys.filter(function(k){return k!==CACHE}).map(function(k){return caches.delete(k)}));
     }).then(function(){return self.clients.claim()})
+  );
+});
+
+function clearRestTimer(){
+  if(restTimer){clearTimeout(restTimer);restTimer=null}
+}
+
+function closeRestNotes(tag){
+  tag=tag||"forge-rest";
+  self.registration.getNotifications({tag:tag}).then(function(list){
+    list.forEach(function(n){n.close()});
+  }).catch(function(){});
+}
+
+self.addEventListener("message",function(e){
+  var d=e.data||{};
+  if(d.type==="cancel-rest"){
+    clearRestTimer();
+    closeRestNotes(d.tag);
+    return;
+  }
+  if(d.type==="schedule-rest"){
+    clearRestTimer();
+    closeRestNotes(d.tag);
+    var delay=Math.max(0,(+d.at||0)-Date.now());
+    restTimer=setTimeout(function(){
+      restTimer=null;
+      self.registration.showNotification(d.title||"Rest over",{
+        body:d.body||"Forge — next set",
+        tag:d.tag||"forge-rest",
+        vibrate:[200,80,200,80,200],
+        icon:"icon-192.png",
+        data:{url:"./"}
+      });
+    },delay);
+  }
+});
+
+self.addEventListener("notificationclick",function(e){
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({type:"window",includeUncontrolled:true}).then(function(list){
+      for(var i=0;i<list.length;i++){
+        if(list[i]&&list[i].focus) return list[i].focus();
+      }
+      if(self.clients.openWindow) return self.clients.openWindow("./");
+    })
   );
 });
 
