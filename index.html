@@ -827,7 +827,7 @@ function sessView(){
     html+='<button class="btn btn2" onclick="openAddLift()">+ Add lift</button>';
   }
   html+='<div class="card"><div class="label">Notes</div>'+
-    '<textarea rows="3" placeholder="knee — cut squat to 95" oninput="setSessNote(this.value)">'+esc(sess.note||"")+'</textarea></div>';
+    '<textarea rows="3" placeholder="e.g. knee — cut squat to 95" oninput="setSessNote(this.value)">'+esc(sess.note||"")+'</textarea></div>';
   if(dc===e.s) html+='<button class="btn" onclick="nxt()">'+(sess.i<sess.ex.length-1?'Next lift':'Finish workout')+'</button>';
   html+='<button class="btn btn2" onclick="nxt()">Skip lift</button>';
   html+='<button class="btn btn2" onclick="quitSess()">Quit workout</button>';
