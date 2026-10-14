@@ -1,4 +1,4 @@
-var CACHE="forge-ab-0.6.23";
+var CACHE="forge-ab-0.7.0";
 var SHELL=["./","index.html","manifest.webmanifest","icon-192.png","icon-512.png"];
 var restTimer=null;
 

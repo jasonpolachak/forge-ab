@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#0c0620"/>
 <link rel="manifest" href="manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
-<title>Forge 0.6.23</title>
+<title>Forge 0.7.0</title>
 <style>
 :root,html[data-theme="outrun"]{
   --field:#0c0620;--card:#1a1333;--text:#f4f0ff;--muted:#8eb8c9;--border:#3e2f62;
@@ -50,6 +50,7 @@ textarea{resize:vertical;min-height:72px;line-height:1.4}
 .set.wu.hit .tag{color:#3dba7a}
 .set.wu.miss .tag{color:#ffb4ab}
 .icon{width:52px;height:52px;border:0;border-radius:14px;background:var(--icon);color:var(--text);font-size:22px;font-weight:800}
+.icon.tiny{font-size:13px;letter-spacing:-.03em}
 .set.hit .icon.go{background:#3dba7a;color:#062214}
 .set.miss .icon.no{background:#e15b4a;color:#2a0c0a}
 .muted{color:var(--muted);font-size:13px}
@@ -70,6 +71,8 @@ textarea{resize:vertical;min-height:72px;line-height:1.4}
 .seg{display:flex;gap:6px;margin-top:8px}
 .seg button{flex:1;padding:10px 4px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text);font-weight:800;font-size:12px}
 .seg button.on{background:var(--primary);color:var(--ink);border-color:var(--primary)}
+.seg.plan{margin-top:0}
+.seg.plan button{font-size:16px;min-height:52px;padding:14px 8px}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:10px}
 .cal i{display:block;aspect-ratio:1;border-radius:50%;background:var(--well);border:1px solid var(--border)}
 .cal i.on{background:var(--primary);border-color:var(--primary)}
@@ -96,8 +99,8 @@ textarea{resize:vertical;min-height:72px;line-height:1.4}
 <div class="app" id="app">Loading…</div>
 <div class="toast" id="toast"></div>
 <script>
-var V="0.6.23",K="forge-ab-v1";
-var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear"];
+var V="0.7.0",K="forge-ab-v1";
+var SAVE_KEYS=["units","rest","sound","last","theme","graph","fail","hist","A","B","C","sess","programId","goal","daysWk","gear","plan","buildLast","UA","LA","UB","LB"];
 var D={units:"lb",rest:90,sound:0,last:null,theme:"outrun",graph:"w",fail:{},hist:[],programId:null,goal:null,daysWk:null,gear:null,
 A:{name:"Workout A",ex:[
 {id:"squat",n:"Squat",s:5,r:5,inc:5,w:45,seed:"bar"},
@@ -140,6 +143,85 @@ function jasonTemplate(){
       bar("dl","Deadlift",3,5,10,95),
       custom("B"),
       custom("B2")
+    ])
+  };
+}
+function mixOpt(a,b){
+  var o={},k;
+  if(a) for(k in a) if(a.hasOwnProperty(k)) o[k]=a[k];
+  if(b) for(k in b) if(b.hasOwnProperty(k)) o[k]=b[k];
+  return o;
+}
+function buildEx(id,n,s,lo,hi,opt){
+  opt=opt||{};
+  var e={
+    id:id,n:n,s:s,r:lo,rLo:lo,rHi:hi,
+    inc:opt.inc!=null?opt.inc:2.5,
+    w:"",
+    prog:opt.log?"log":"double",
+    seed:opt.seed||"",
+    plates:opt.plates?1:0,
+    warm:opt.warm?1:0,
+    knee:opt.knee?1:0,
+    incKind:opt.incKind||"other"
+  };
+  if(opt.amrap){
+    e.amrap=1;
+    e.prog="double";
+    e.r=5;
+    e.rLo=null;
+    e.rHi=null;
+  }
+  if(opt.log){
+    e.prog="log";
+    e.inc=0;
+    e.logOnly=1;
+    e.hideW=1;
+    e.r=1;
+    e.rLo=null;
+    e.rHi=null;
+    e.amrap=0;
+  }
+  return e;
+}
+function buildTemplate(){
+  var bar={inc:5,incKind:"bar",plates:1,seed:"bar",warm:0};
+  var cable={inc:2.5,incKind:"cable",plates:0,seed:"cable",warm:0};
+  var other={inc:2.5,incKind:"other",plates:0,warm:0};
+  return {
+    UA:day("Upper A",[
+      buildEx("b_bench","Bench press",4,6,12,mixOpt(bar,{warm:1})),
+      buildEx("b_pullup","Pull-ups",4,5,5,{amrap:1,seed:"bw",inc:2.5,incKind:"other",plates:0,warm:0}),
+      buildEx("b_ohp","Seated overhead press",3,8,12,bar),
+      buildEx("b_crow","Cable row",3,10,15,cable),
+      buildEx("b_latraise","Cable lateral raise",3,12,20,cable),
+      buildEx("b_ezcurl","EZ-bar curl",3,10,15,mixOpt(bar,{plates:0,seed:"ez"})),
+      buildEx("b_pushdown","Cable triceps pushdown",3,12,20,cable)
+    ]),
+    LA:day("Lower A",[
+      buildEx("b_rdl","Romanian deadlift",4,6,12,mixOpt(bar,{warm:1,knee:1})),
+      buildEx("b_hip","Barbell hip thrust",4,8,15,mixOpt(bar,{knee:1})),
+      buildEx("b_legcurl","Leg curl",4,10,20,mixOpt(other,{knee:1,seed:"machine"})),
+      buildEx("b_legext","Leg extension (light, pain-free partial range)",3,15,25,mixOpt(other,{knee:1,seed:"machine"})),
+      buildEx("b_calf","Standing calf raise",4,12,20,mixOpt(other,{knee:1,seed:"machine"})),
+      buildEx("b_crunch","Cable crunch",3,12,20,cable)
+    ]),
+    UB:day("Upper B",[
+      buildEx("b_incline","Incline bench",4,8,12,mixOpt(bar,{warm:1})),
+      buildEx("b_pulldown","Lat pulldown",3,10,15,cable),
+      buildEx("b_srow","Seated cable row",3,10,15,cable),
+      buildEx("b_face","Cable face pull",3,15,25,cable),
+      buildEx("b_skull","EZ skull crusher",3,10,15,mixOpt(bar,{plates:0,seed:"ez"})),
+      buildEx("b_ccurl","Cable curl",3,12,20,cable),
+      buildEx("b_reardelt","DB rear-delt fly",2,15,30,mixOpt(other,{seed:"db"}))
+    ]),
+    LB:day("Lower B",[
+      buildEx("b_legcurl","Leg curl",4,10,20,mixOpt(other,{knee:1,seed:"machine"})),
+      buildEx("b_bridge","Glute bridge or hip thrust",3,12,20,mixOpt(other,{knee:1,seed:"bw"})),
+      buildEx("b_pullthru","Cable pull-through",3,12,20,mixOpt(cable,{knee:1})),
+      buildEx("b_legext","Leg extension (light, partial range)",2,15,25,mixOpt(other,{knee:1,seed:"machine"})),
+      buildEx("b_seatedcalf","Seated calf raise or calf raise",4,15,25,mixOpt(other,{knee:1,seed:"machine"})),
+      buildEx("b_core","Dead bug or plank",1,1,1,{log:1,seed:"bw"})
     ])
   };
 }
@@ -237,6 +319,10 @@ function load(){
   if(!p) return clone(D);
   return mergeSave(p);
 }
+(function(){
+  var b=buildTemplate();
+  D.UA=b.UA; D.LA=b.LA; D.UB=b.UB; D.LB=b.LB;
+})();
 var S=load(),view="home",sess=null,timer=null,left=0,restEnds=0,lastRes=[],lastMarked=0,restTold=0,wakeLock=null,logForm=null,addForm=null,homeSet=0,audioCtx=null;
 var restAlertAt=0,restNotifTimer=null,REST_TAG="forge-rest";
 var quiz={step:0,goal:null,daysWk:null,gear:null},pickFrom="onboard";
@@ -246,6 +332,24 @@ if(!rawBoot) view="quiz";
 else if(!skipQuiz(rawBoot)) view="quiz";
 else if(!rawBoot.programId){S.programId="stronglifts-5x5";save()}
 function save(){try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}}
+function ensureBuild(){
+  var t=buildTemplate(),ch=0;
+  ["UA","LA","UB","LB"].forEach(function(k){
+    if(!S[k]||!S[k].ex){S[k]=t[k];ch=1}
+  });
+  return ch;
+}
+function persistBuild(){
+  ensureBuild();
+  var raw=loadRaw();
+  if(!raw||typeof raw!=="object"||Array.isArray(raw)) return;
+  var ch=0;
+  ["UA","LA","UB","LB"].forEach(function(k){
+    if(!raw[k]){raw[k]=S[k];ch=1}
+  });
+  if(ch){try{localStorage.setItem(K,JSON.stringify(raw))}catch(e){}}
+}
+persistBuild();
 function persistSess(){
   if(!sess){S.sess=null;save();return}
   S.sess={k:sess.k,i:sess.i,ex:sess.ex,restEnds:restEnds||0,lastMarked:lastMarked,note:sess.note!=null?String(sess.note):""};
@@ -265,15 +369,32 @@ function dropWake(){
   wakeLock=null;
 }
 function toast(m){var t=document.getElementById("toast");t.textContent=m;t.className="toast show";setTimeout(function(){t.className="toast"},1600)}
+function plan(){return S.plan==="build"?"build":"five"}
+function isBuildKey(k){return k==="UA"||k==="LA"||k==="UB"||k==="LB"}
 function dayKeys(){
+  if(plan()==="build") return ["UA","LA","UB","LB"];
   var k=["A","B"];
   if(S.C&&S.C.ex&&S.C.ex.length) k.push("C");
   return k;
 }
+function rememberLast(k){
+  if(isBuildKey(k)) S.buildLast=k;
+  else S.last=k;
+}
 function next(){
-  var keys=dayKeys(),i=keys.indexOf(S.last);
+  var keys=dayKeys();
+  var last=plan()==="build"?S.buildLast:S.last;
+  var i=keys.indexOf(last);
   if(i<0) return keys[0];
   return keys[(i+1)%keys.length];
+}
+function setPlan(p){
+  if(p!=="five"&&p!=="build") return;
+  ensureBuild();
+  if(plan()===p) return;
+  S.plan=p;
+  save();
+  draw();
 }
 function theme(){return S.theme==="gym"?"gym":"outrun"}
 function graph(){return S.graph==="e1rm"||S.graph==="vol"||S.graph==="reps"?S.graph:"w"}
@@ -287,7 +408,10 @@ function toggleTheme(){S.theme=theme()==="outrun"?"gym":"outrun";save();applyThe
 function u(){return S.units==="kg"?"kg":"lb"}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return c==="&"?"&"+"amp;":c==="<"? "&"+"lt;":c===">"?"&"+"gt;":"&"+"quot;"})}
 function bump(id,fn){dayKeys().forEach(function(k){S[k].ex.forEach(function(e){if(e.id===id)fn(e)})})}
-function programName(){return (PROGRAMS[S.programId]&&PROGRAMS[S.programId].name)||"StrongLifts 5×5"}
+function programName(){
+  if(plan()==="build") return "Build";
+  return (PROGRAMS[S.programId]&&PROGRAMS[S.programId].name)||"StrongLifts 5×5";
+}
 function recommend(goal,daysWk,gear){
   if(gear==="bb"){
     if(daysWk==="23") return goal==="muscle"?"greyskull-lp":"stronglifts-5x5";
@@ -367,9 +491,30 @@ function chooseProgram(id){
 }
 function goPick(){pickFrom="change";go("pick")}
 function scheme(e){
+  if(!e) return "";
+  if(e.amrap) return e.s+"×as many reps as possible";
+  if(e.logOnly) return "log only";
+  if(e.rLo!=null&&e.rHi!=null&&+e.rLo!==+e.rHi) return e.s+"×"+e.rLo+"\u2013"+e.rHi;
   if(e.lastAmrap&&e.s>1) return (e.s-1)+"×"+e.r+" + AMRAP";
   if(e.lastAmrap&&e.s===1) return "1×AMRAP ("+e.r+"+)";
   return e.s+"×"+e.r;
+}
+function kneeNote(e){
+  if(!e||!e.knee) return "";
+  return '<p class="muted">knee: pain-free range only; skip if the inside of the knee hurts</p>';
+}
+function isBlankW(e){
+  if(!e) return true;
+  return e.w==null||(typeof e.w==="string"&&!String(e.w).trim());
+}
+function uiStep(e){
+  if(e&&(e.prog==="double"||e.incKind)&&isFinite(+e.inc)&&+e.inc>0) return +e.inc;
+  return step();
+}
+function incPhrase(e){
+  var n=trimNum(+e.inc||0)+" "+u();
+  if(e&&e.incKind==="cable") return "one cable pin or "+n;
+  return n;
 }
 function seedNote(e){
   if(!e) return "";
@@ -390,26 +535,40 @@ function liftBlock(k,e,i){
   var html=empty
     ?'<p class="muted" style="margin-top:10px">Optional extra</p>'
     :'<div class="label" style="margin-top:10px">'+(e.optional?'Custom (optional)':esc(e.n||"Custom"))+' · '+scheme(e)+'</div>';
+  if(!empty) html+=kneeNote(e);
   if(e.optional){
     html+='<input'+(empty?' class="ghost"':'')+' placeholder="'+(empty?'Name to add':'Name this lift to add it')+'" value="'+esc(e.n)+'" onchange="S.'+k+'.ex['+i+'].n=this.value;save();draw()">';
     if(empty) return html;
   }
+  if(e.hideW){
+    if(note) html+='<p class="muted">'+note+'</p>';
+    return html;
+  }
+  var st=uiStep(e), wv=isBlankW(e)?"":e.w, slab=trimNum(st), sic=String(slab).length>1?"icon tiny":"icon";
   html+='<div class="row">'+
-    '<button class="icon" onclick="nudge(\''+k+'\','+i+',-step())">−'+step()+'</button>'+
-    '<input type="number" inputmode="decimal" step="0.5" value="'+e.w+'" onchange="setW(\''+k+'\','+i+',this.value)">'+
+    '<button class="'+sic+'" onclick="nudge(\''+k+'\','+i+',-'+st+')">−'+slab+'</button>'+
+    '<input type="number" inputmode="decimal" step="0.5" placeholder="weight" value="'+esc(wv)+'" onchange="setW(\''+k+'\','+i+',this.value)">'+
     '<div class="unit">'+u()+'</div>'+
-    '<button class="icon" onclick="nudge(\''+k+'\','+i+',step())">+'+step()+'</button></div>';
+    '<button class="'+sic+'" onclick="nudge(\''+k+'\','+i+','+st+')">+'+slab+'</button></div>';
   if(note) html+='<p class="muted">'+note+'</p>';
   return html;
 }
 function home(){
-  var k=next(),w=S[k],h=S.hist[0]||null,html=header("Forge")+
-    '<div class="card"><div class="label">Program</div><div class="name" style="font-size:22px">'+esc(programName())+'</div>'+
-    '<button class="btn btn2" onclick="applyMyPlan()">My plan</button>'+
-    '<button class="quiet" onclick="goPick()">Change program</button></div>'+
-    '<div class="card"><div class="label">Up next</div><div class="name">'+esc(w.name)+'</div>'+
+  ensureBuild();
+  var k=next(),w=S[k],h=S.hist[0]||null,onBuild=plan()==="build";
+  var html=header("Forge")+
+    '<div class="card"><div class="label">Plan</div><div class="seg plan">'+
+    '<button class="'+(onBuild?"":"on")+'" onclick="setPlan(\'five\')">5×5</button>'+
+    '<button class="'+(onBuild?"on":"")+'" onclick="setPlan(\'build\')">Build</button></div></div>';
+  if(!onBuild){
+    html+='<div class="card"><div class="label">Program</div><div class="name" style="font-size:22px">'+esc(programName())+'</div>'+
+      '<button class="btn btn2" onclick="applyMyPlan()">My plan</button>'+
+      '<button class="quiet" onclick="goPick()">Change program</button></div>';
+  }
+  html+='<div class="card"><div class="label">Up next</div><div class="name">'+esc(w.name)+'</div>'+
     '<p class="muted">Rest '+(S.rest||90)+'s</p>';
-  if(S.last&&S[S.last]) html+='<p class="muted">Last: '+esc(S[S.last].name)+'</p>';
+  var lastK=onBuild?S.buildLast:S.last;
+  if(lastK&&S[lastK]) html+='<p class="muted">Last: '+esc(S[lastK].name)+'</p>';
   w.ex.forEach(function(e,i){html+=liftBlock(k,e,i)});
   var open=openSnap();
   if(open){
@@ -525,18 +684,37 @@ function pickView(){
 }
 function step(){return S.units==="kg"?2.5:5}
 function setW(k,i,v){
-  v=+v; if(!isFinite(v))return;
-  var e=S[k].ex[i]; e.w=v; bump(e.id,function(x){x.w=v}); save(); toast("Weight saved");
+  var e=S[k]&&S[k].ex[i]; if(!e) return;
+  var w;
+  if(v==null||(typeof v==="string"&&!String(v).trim())) w="";
+  else { w=+v; if(!isFinite(w)) return; }
+  e.w=w;
+  bump(e.id,function(x){x.w=w});
+  save();
+  toast(w===""?"Weight cleared":"Weight saved");
 }
 function nudge(k,i,d){
-  var e=S[k].ex[i]; var v=Math.max(0,Math.round((+e.w+d)*2)/2);
+  var e=S[k]&&S[k].ex[i]; if(!e) return;
+  var base=isBlankW(e)?0:+e.w;
+  var v=Math.max(0,Math.round((base+d)*2)/2);
   setW(k,i,v); draw();
 }
 function toggleU(){S.units=S.units==="lb"?"kg":"lb";save();draw()}
 function copyLift(e){
   var log=[],i;
-  for(i=0;i<e.s;i++) log.push({r:e.r,ok:0});
-  return {id:e.id,n:e.n,s:e.s,r:e.r,inc:e.inc,w:e.w,log:log,prog:e.prog||"linear",lastAmrap:e.lastAmrap||0,repCap:e.repCap,rFloor:e.rFloor,seed:e.seed,t2r:e.t2r,floor:e.floor};
+  var reps=(e.rLo!=null&&!e.amrap)?e.rLo:e.r;
+  for(i=0;i<e.s;i++) log.push({r:reps,ok:0});
+  var o={id:e.id,n:e.n,s:e.s,r:e.r,inc:e.inc,w:e.w,log:log,prog:e.prog||"linear",lastAmrap:e.lastAmrap||0,repCap:e.repCap,rFloor:e.rFloor,seed:e.seed,t2r:e.t2r,floor:e.floor};
+  if(e.rLo!=null) o.rLo=e.rLo;
+  if(e.rHi!=null) o.rHi=e.rHi;
+  if(e.amrap) o.amrap=1;
+  if(e.knee) o.knee=1;
+  if(e.plates!=null) o.plates=e.plates;
+  if(e.warm!=null) o.warm=e.warm;
+  if(e.incKind) o.incKind=e.incKind;
+  if(e.logOnly) o.logOnly=1;
+  if(e.hideW) o.hideW=1;
+  return o;
 }
 function openSnap(){
   if(sess&&sess.ex&&sess.ex.length) return sess;
@@ -570,7 +748,7 @@ function start(k){
 function doneCount(e){return e.log.filter(function(s){return s.ok}).length}
 function wLabel(e){
   if(e.prog==="bw"||e.prog==="pullup"||e.seed==="bw") return "Load";
-  if(e.seed==="db") return "Weight";
+  if(e.seed==="db"||e.seed==="cable"||e.seed==="machine"||e.seed==="ez"||e.plates===0) return "Weight";
   return "On the bar";
 }
 function lastHistW(id){
@@ -590,6 +768,13 @@ function lastHistW(id){
 }
 function weightCue(e){
   if(!e) return "";
+  if(e.prog==="double"){
+    if(e.amrap) return "As many reps as you can. Load stays until you change it.";
+    if(e.rHi==null) return "";
+    var phrase=incPhrase(e);
+    if(isBlankW(e)) return "Enter a weight. Suggest "+phrase+" when every set hits "+e.rHi+".";
+    return "Suggest "+phrase+" when every set hits "+e.rHi+".";
+  }
   var parts=[], last=lastHistW(e.id), inc=+e.inc, w=+e.w, p=e.prog||"linear";
   if(last!=null) parts.push("Last "+last);
   if(inc>0&&isFinite(w)&&p!=="log"&&p!=="bw"&&p!=="pullup") parts.push("next "+rnd(w+inc)+" if you hit (+"+inc+")");
@@ -597,6 +782,8 @@ function weightCue(e){
 }
 function usesBar(e){
   if(!e) return false;
+  if(e.plates===1) return !isBlankW(e);
+  if(e.plates===0) return false;
   if(e.seed==="db"||e.seed==="bw") return false;
   if(e.prog==="bw"||e.prog==="pullup") return false;
   if(e.prog==="log"&&e.seed!=="bar") return false;
@@ -607,7 +794,8 @@ function barW(){return S.units==="kg"?20:45}
 function trimNum(n){return String(Math.round(n*100)/100)}
 function platesLine(e,w){
   if(!usesBar(e)) return "";
-  if(w==null) w=+e.w;
+  if(w==null||w==="") w=+e.w;
+  if(w==null||w===""||(typeof w==="string"&&!String(w).trim())) return "";
   var bar=barW(), sizes=plateSizes(), remain, parts=[], i, n, p;
   if(!isFinite(w)||w<=bar) return "empty bar";
   remain=Math.round((w-bar)*50);
@@ -628,6 +816,12 @@ function roundPlates(w){
   return rnd(bar+Math.round((w-bar)/step)*step);
 }
 function needsWu(e){
+  if(!e) return false;
+  if(e.warm===0) return false;
+  if(e.warm===1){
+    var w1=+e.w;
+    return !isBlankW(e)&&isFinite(w1)&&w1>barW();
+  }
   if(!usesBar(e)) return false;
   if(e.prog==="log") return false;
   var w=+e.w;
@@ -763,24 +957,42 @@ function restHint(e,dc){
   if(dc===0) return "Next lift. Rest, then start set 1.";
   return "Set "+(lastMarked+1)+" logged. Then do set "+(lastMarked+2<=e.s?lastMarked+2:e.s)+".";
 }
+function doubleSuggest(e){
+  if(!e||e.prog!=="double"||!e.log||doneCount(e)<e.s||!logged(e)) return "";
+  if(e.amrap||e.rHi==null) return "Suggest: keep the weight — aim for more reps";
+  var top=e.log.every(function(s){return s.ok===1&&+s.r>=+e.rHi});
+  if(!top) return "Suggest: keep the weight — aim for more reps";
+  if(isBlankW(e)||!isFinite(+e.w)) return "Suggest: enter a weight — every set hit "+e.rHi;
+  return "Suggest: add "+incPhrase(e)+" next time";
+}
 function sessView(){
   var e=sess.ex[sess.i], dc=doneCount(e), lastLift=sess.i===sess.ex.length-1, cue=weightCue(e);
   ensureWu(e);
   var plates=nowPlates(e), showWu=!!(e.wu&&e.wu.length&&!e.wuSkip), wuN=showWu?e.wu.length:0, wuD=wuDone(e);
+  var stepN=uiStep(e), sug=doubleSuggest(e), dayName=(S[sess.k]&&S[sess.k].name)||sess.k;
+  var slab=trimNum(stepN), sic=String(slab).length>1?"icon tiny":"icon";
   var html='<div class="top"><div class="brand"><button class="icon" onclick="go(\'home\')">←</button>'+
-    '<div><div class="label" style="margin:0">'+esc(S[sess.k].name)+'</div><p class="muted">'+(sess.i+1)+' of '+sess.ex.length+' lifts</p></div></div>'+
+    '<div><div class="label" style="margin:0">'+esc(dayName)+'</div><p class="muted">'+(sess.i+1)+' of '+sess.ex.length+' lifts</p></div></div>'+
     '<span class="ver">v'+V+'</span></div>'+
     '<div class="sndrow"><button class="snd" onclick="toggleSound()">'+soundLabel()+'</button>'+
     '<button class="snd" onclick="testSound()">Test</button>'+
     '<button class="snd" onclick="askRestAlerts()">'+esc(restAlertShort())+'</button></div>';
   html+='<div class="card"><div class="label">Now lifting</div><div class="name">'+esc(e.n)+'</div>'+
-    '<p class="muted">'+scheme(e)+(e.prog==="log"?" · log only":"")+'</p>'+
-    '<div class="wrow"><button class="icon" onclick="adjW(-step())">−'+step()+'</button>'+
-    '<div><div class="label" style="margin:0;text-align:center">'+wLabel(e)+'</div><div class="wbig">'+e.w+'</div><p class="muted" style="text-align:center">'+u()+'</p>'+
-    (plates?'<p class="muted" style="text-align:center">'+esc(plates)+'</p>':'')+
-    (cue?'<p class="muted" style="text-align:center">'+esc(cue)+'</p>':'')+'</div>'+
-    '<button class="icon" onclick="adjW(step())">+'+step()+'</button></div>'+
-    '<div class="status">'+(wuPending(e)
+    '<p class="muted">'+scheme(e)+(e.prog==="log"&&!e.logOnly?" · log only":"")+'</p>'+
+    kneeNote(e);
+  if(!e.hideW){
+    html+='<div class="wrow"><button class="'+sic+'" onclick="adjW(-'+stepN+')">−'+slab+'</button>'+
+      '<div><div class="label" style="margin:0;text-align:center">'+wLabel(e)+'</div>'+
+      (isBlankW(e)
+        ?'<input type="number" inputmode="decimal" step="0.5" placeholder="weight" style="font-size:32px;font-weight:800;text-align:center" onchange="setSessW(this.value)">'
+        :'<div class="wbig">'+e.w+'</div>')+
+      '<p class="muted" style="text-align:center">'+u()+'</p>'+
+      (plates?'<p class="muted" style="text-align:center">'+esc(plates)+'</p>':'')+
+      (!sug&&cue?'<p class="muted" style="text-align:center">'+esc(cue)+'</p>':'')+'</div>'+
+      '<button class="'+sic+'" onclick="adjW('+stepN+')">+'+slab+'</button></div>';
+  }
+  if(sug) html+='<div class="status"><b>'+esc(sug)+'</b></div>';
+  html+='<div class="status">'+(wuPending(e)
       ?('<b>Warm-up '+(wuD+1)+' of '+wuN+'</b><br><span class="muted">Then '+scheme(e)+' at '+e.w+' '+u()+'. Skip if you are warm.</span>')
       :('<b>'+dc+' of '+e.s+' sets logged</b><br><span class="muted">'+(dc<e.s?('Tap the green check after set '+(dc+1)+'.'):(lastLift?'All sets logged. Finish or add a lift.':'All sets logged. Go to next lift.'))+'</span>'))+
     '</div></div>';
@@ -882,9 +1094,22 @@ function commitAddLift(){
   draw();
 }
 function chg(i,d){sess.ex[sess.i].log[i].r=Math.max(0,sess.ex[sess.i].log[i].r+d);persistSess();draw()}
+function setSessW(v){
+  var e=sess&&sess.ex[sess.i]; if(!e) return;
+  var w;
+  if(v==null||(typeof v==="string"&&!String(v).trim())) w="";
+  else { w=+v; if(!isFinite(w)) return; w=Math.max(0,rnd(w)); }
+  e.w=w;
+  if(e.prog!=="log") bump(e.id,function(x){x.w=w});
+  ensureWu(e);
+  persistSess();
+  toast(w===""?"Weight cleared":e.n+" "+w+" "+u());
+  draw();
+}
 function adjW(d){
   var e=sess.ex[sess.i];
-  e.w=Math.max(0,Math.round((+e.w+d)*2)/2);
+  var base=isBlankW(e)?0:+e.w;
+  e.w=Math.max(0,rnd(base+d));
   if(e.prog!=="log") bump(e.id,function(x){x.w=e.w});
   ensureWu(e);
   persistSess();
@@ -1227,9 +1452,22 @@ function applyRepLoad(e){
   }
   return {hit:0,msg:"skipped"}
 }
+function applyDouble(e){
+  if(!logged(e)) return {hit:0,msg:"skipped"};
+  if(e.amrap||e.rHi==null) return {hit:0,msg:"Suggest: keep the weight — aim for more reps"};
+  var top=e.log.every(function(s){return s.ok===1&&+s.r>=+e.rHi});
+  if(!top) return {hit:0,msg:"Suggest: keep the weight — aim for more reps"};
+  if(isBlankW(e)||!isFinite(+e.w)) return {hit:1,msg:"Suggest: enter a weight — every set hit "+e.rHi};
+  var inc=+e.inc||0;
+  if(!(inc>0)) return {hit:1,msg:"Suggest: keep the weight — aim for more reps"};
+  var base=+e.w;
+  bump(e.id,function(x){x.w=rnd(base+inc)});
+  return {hit:1,msg:"Suggest: add "+incPhrase(e)+" next time"};
+}
 function applyLift(e){
   var p=e.prog||"linear";
   if(p==="log") return {hit:0,msg:"logged"};
+  if(p==="double") return applyDouble(e);
   if(p==="gslp") return applyGslp(e);
   if(p==="t1") return applyT1(e);
   if(p==="t2") return applyT2(e);
@@ -1243,20 +1481,24 @@ function nxt(){
     var r=applyLift(e);
     return {id:e.id,n:e.n,w:e.w,hit:r.hit,msg:r.msg};
   });
-  S.last=sess.k;
+  rememberLast(sess.k);
   var rec={
     k:sess.k,
     at:Date.now(),
-    lifts:sess.ex.map(function(e){
-      return {
+    lifts:sess.ex.map(function(e,i){
+      var row={
         id:e.id,n:e.n,w:e.w,s:e.s,r:e.r,
         sets:e.log.map(function(s){
           var o={r:s.r,ok:s.ok};
           if(s.rest!=null&&isFinite(+s.rest)&&s.ok) o.rest=Math.round(+s.rest);
           return o;
         }),
-        hit:e.log.every(function(s){return s.ok===1&&s.r>=e.r})
+        hit:e.prog==="double"?(!!(lastRes[i]&&lastRes[i].hit)):e.log.every(function(s){return s.ok===1&&s.r>=e.r})
       };
+      if(e.rLo!=null) row.rLo=e.rLo;
+      if(e.rHi!=null) row.rHi=e.rHi;
+      if(e.amrap) row.amrap=1;
+      return row;
     })
   };
   var avg=restAvg(rec);
@@ -1281,20 +1523,46 @@ function doneView(){
     '<button class="btn btn2" onclick="go(\'prog\')">Progress</button>';
   return html;
 }
+function setRange(k,i,which,v){
+  var e=S[k]&&S[k].ex[i]; if(!e) return;
+  v=Math.round(+v);
+  if(!isFinite(v)||v<1) return;
+  if(which==="lo"){e.rLo=v;e.r=v;if(e.rHi!=null&&+e.rHi<v)e.rHi=v}
+  else {e.rHi=v;if(e.rLo!=null&&v<+e.rLo)e.rLo=v}
+  save();
+}
+function addEditLift(k){
+  if(!S[k]) return;
+  var id="ex"+Math.random().toString(36).slice(2,7);
+  if(isBuildKey(k)) S[k].ex.push({id:id,n:"New lift",s:3,r:8,rLo:8,rHi:12,inc:2.5,w:"",prog:"double",incKind:"other",plates:0,warm:0,seed:""});
+  else S[k].ex.push({id:id,n:"New lift",s:3,r:8,inc:5,w:S.units==="kg"?20:45,prog:"linear"});
+  save();draw();
+}
 function editView(k){
-  var w=S[k],html=header("Edit "+w.name,1)+'<div class="card"><div class="label">Workout name</div>'+
+  var w=S[k];
+  if(!w) return header("Edit",1)+'<div class="card"><p class="muted">That day is not on this plan.</p></div>';
+  var html=header("Edit "+w.name,1)+'<div class="card"><div class="label">Workout name</div>'+
     '<input value="'+esc(w.name)+'" onchange="S.'+k+'.name=this.value;save()">';
   w.ex.forEach(function(e,i){
     html+='<div class="label" style="margin-top:12px">Lift '+(i+1)+'</div>'+
-      '<input value="'+esc(e.n)+'" onchange="S.'+k+'.ex['+i+'].n=this.value;save()">'+
-      '<div class="row"><input type="number" value="'+e.s+'" onchange="S.'+k+'.ex['+i+'].s=+this.value;save()" placeholder="sets">'+
-      '<input type="number" value="'+e.r+'" onchange="S.'+k+'.ex['+i+'].r=+this.value;save()" placeholder="reps"></div>'+
-      '<div class="row"><input type="number" step="0.5" value="'+e.w+'" onchange="var v=+this.value;S.'+k+'.ex['+i+'].w=v;bump(\''+e.id+'\',function(x){x.w=v});save()">'+
-      '<input type="number" step="0.5" value="'+e.inc+'" onchange="S.'+k+'.ex['+i+'].inc=+this.value;save()"></div>'+
-      '<p class="muted">'+(e.prog==="log"?"Log only — no auto add":"Weight · add when you hit")+'</p>'+
+      '<input value="'+esc(e.n)+'" onchange="S.'+k+'.ex['+i+'].n=this.value;save()">';
+    if(e.prog==="double"&&!e.amrap){
+      html+='<div class="row"><input type="number" value="'+e.s+'" onchange="S.'+k+'.ex['+i+'].s=+this.value;save()" placeholder="sets">'+
+        '<input type="number" value="'+(e.rLo!=null?e.rLo:e.r)+'" onchange="setRange(\''+k+'\','+i+',\'lo\',this.value)" placeholder="low">'+
+        '<input type="number" value="'+(e.rHi!=null?e.rHi:e.r)+'" onchange="setRange(\''+k+'\','+i+',\'hi\',this.value)" placeholder="high"></div>';
+    } else {
+      html+='<div class="row"><input type="number" value="'+e.s+'" onchange="S.'+k+'.ex['+i+'].s=+this.value;save()" placeholder="sets">'+
+        '<input type="number" value="'+e.r+'" onchange="S.'+k+'.ex['+i+'].r=+this.value;save()" placeholder="reps"></div>';
+    }
+    if(!e.hideW){
+      var wv=isBlankW(e)?"":e.w;
+      html+='<div class="row"><input type="number" step="0.5" placeholder="weight" value="'+esc(wv)+'" onchange="setW(\''+k+'\','+i+',this.value)">'+
+        '<input type="number" step="0.5" value="'+e.inc+'" onchange="S.'+k+'.ex['+i+'].inc=+this.value;save()"></div>';
+    }
+    html+='<p class="muted">'+(e.prog==="log"?"Log only — no auto add":e.amrap?"AMRAP · load stays until you change it":e.prog==="double"?"Rep range · add load only when every set hits the top":"Weight · add when you hit")+'</p>'+
       '<button class="btn btn2" onclick="S.'+k+'.ex.splice('+i+',1);save();draw()">Remove lift</button>';
   });
-  html+='<button class="btn" onclick="S.'+k+'.ex.push({id:\'ex\'+Math.random().toString(36).slice(2,7),n:\'New lift\',s:3,r:8,inc:5,w:'+(S.units==="kg"?20:45)+',prog:\'linear\'});save();draw()">+ Add lift</button></div>';
+  html+='<button class="btn" onclick="addEditLift(\''+k+'\')">+ Add lift</button></div>';
   return html;
 }
 function collectRests(h){
@@ -1422,7 +1690,8 @@ function setLogSetR(i,si,v,quiet){
 function setLogW(i,v){v=+v;if(!isFinite(v)||!logForm.lifts[i])return;logForm.lifts[i].w=v}
 function nudgeLog(i,d){
   var L=logForm.lifts[i]; if(!L)return;
-  L.w=Math.max(0,Math.round((+L.w+d)*2)/2); draw();
+  var base=isBlankW(L)?0:+L.w;
+  L.w=Math.max(0,Math.round((base+d)*2)/2); draw();
 }
 function setLogHit(i,hit){if(!logForm.lifts[i])return;logForm.lifts[i].hit=hit?1:0;draw()}
 function logSRRow(L,i){
@@ -1496,7 +1765,7 @@ function saveLog(){
   S.hist.sort(function(a,b){return (+b.at||0)-(+a.at||0)});
   S.hist=S.hist.slice(0,40);
   if(newest){
-    S.last=logForm.k;
+    rememberLast(logForm.k);
     lifts.forEach(function(L){
       if(!L.id) return;
       var w=+L.w||0;
@@ -1618,8 +1887,8 @@ function progView(){
     '<div class="stat"><div class="label">All</div><div class="n">'+S.hist.length+'</div></div></div>'+
     weekDots()+
     '<p class="muted" style="margin-top:8px">Filled circle = a finished session. '+esc(programName())+' · rest '+ (S.rest||90) +'s.</p></div>'+
-    '<div class="card"><div class="label">Powerlifting total</div><div class="name">'+total+' '+u()+'</div>'+
-    '<p class="muted">Squat '+sq+' + bench '+bp+' + deadlift '+dl+' (current working weights)</p></div>'+
+    (plan()==="build"?"":('<div class="card"><div class="label">Powerlifting total</div><div class="name">'+total+' '+u()+'</div>'+
+    '<p class="muted">Squat '+sq+' + bench '+bp+' + deadlift '+dl+' (current working weights)</p></div>'))+
     '<div class="card"><div class="label">Charts</div>'+
     '<div class="seg">'+
     '<button class="'+(gmode==="w"?"on":"")+'" onclick="setGraph(\'w\')">Weight</button>'+
@@ -1671,7 +1940,13 @@ function resetApp(){
 }
 function expData(){
   try{
-    var blob=new Blob([localStorage.getItem(K)||JSON.stringify(S)],{type:"application/json"});
+    persistBuild();
+    var raw=loadRaw();
+    if(!raw||typeof raw!=="object"||Array.isArray(raw)) raw=JSON.parse(JSON.stringify(S));
+    ["plan","buildLast","UA","LA","UB","LB"].forEach(function(k){
+      if(S[k]!=null&&raw[k]==null) raw[k]=S[k];
+    });
+    var blob=new Blob([JSON.stringify(raw)],{type:"application/json"});
     var a=document.createElement("a");
     a.href=URL.createObjectURL(blob);
     a.download="forge-ab-v1.json";
@@ -1706,7 +1981,7 @@ function hydrateSess(){
   if(sess&&sess.ex&&sess.ex.length) return true;
   var p=S.sess;
   if(!p||!p.ex||!p.ex.length) return false;
-  if(dayKeys().indexOf(p.k)<0 && p.k!=="A"&&p.k!=="B"&&p.k!=="C") return false;
+  if(dayKeys().indexOf(p.k)<0 && p.k!=="A"&&p.k!=="B"&&p.k!=="C" && !isBuildKey(p.k)) return false;
   sess={k:p.k,i:+p.i||0,ex:p.ex,note:p.note!=null?String(p.note):(p.notes!=null?String(p.notes):"")};
   if(sess.i<0||sess.i>=sess.ex.length) sess.i=0;
   sess.ex.forEach(ensureWu);
@@ -1731,7 +2006,7 @@ function restoreOpen(){
 function navState(){return {view:view,qs:quiz.step,pf:pickFrom}}
 function isRootView(){return view==="home"||(view==="quiz"&&quiz.step===0)}
 function isSpoke(v){
-  return v==="prog"||v==="hist"||v==="log"||v==="done"||v==="sess"||v==="editA"||v==="editB"||v==="editC"||(v==="pick"&&pickFrom==="change");
+  return v==="prog"||v==="hist"||v==="log"||v==="done"||v==="sess"||(typeof v==="string"&&v.slice(0,4)==="edit")||(v==="pick"&&pickFrom==="change");
 }
 function logoTap(){
   if(view==="home") return;
@@ -1798,9 +2073,7 @@ function draw(){
     else if(view==="home")a.innerHTML=home();
     else if(view==="sess")a.innerHTML=sessView();
     else if(view==="done")a.innerHTML=doneView();
-    else if(view==="editA")a.innerHTML=editView("A");
-    else if(view==="editB")a.innerHTML=editView("B");
-    else if(view==="editC")a.innerHTML=editView("C");
+    else if(view.slice(0,4)==="edit")a.innerHTML=editView(view.slice(4));
     else if(view==="hist")a.innerHTML=histView();
     else if(view==="log"){if(!logForm)initLogForm();a.innerHTML=logView()}
     else if(view==="prog")a.innerHTML=progView();
